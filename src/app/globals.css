@@ -1,0 +1,231 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ================================================================
+   MODO CLARO  — todo #ffffff, sin grises
+   ================================================================ */
+:root {
+  /* Fondos: blanco puro en hex para máxima compatibilidad */
+  --background:        #ffffff;
+  --card:              #ffffff;
+  --popover:           #ffffff;
+  --sidebar:           #ffffff;
+
+  /* Texto */
+  --foreground:        #111118;
+  --card-foreground:   #111118;
+  --popover-foreground:#111118;
+  --sidebar-foreground:#111118;
+
+  /* Primario — ámbar */
+  --primary:           #d97706;
+  --primary-foreground:#ffffff;
+
+  /* Secundario / muted — gris muy suave solo para inputs y zonas muted */
+  --secondary:              #f4f4f6;
+  --secondary-foreground:   #111118;
+  --muted:                  #f4f4f6;
+  --muted-foreground:       #6b7280;
+  --accent:                 #f4f4f6;
+  --accent-foreground:      #111118;
+
+  /* Sidebar secundario */
+  --sidebar-primary:             #d97706;
+  --sidebar-primary-foreground:  #ffffff;
+  --sidebar-accent:              #f4f4f6;
+  --sidebar-accent-foreground:   #111118;
+
+  /* Bordes — negro con poca opacidad para que resalten sobre blanco */
+  --border:   rgba(0, 0, 0, 0.10);
+  --input:    rgba(0, 0, 0, 0.08);
+  --sidebar-border: rgba(0, 0, 0, 0.07);
+  --ring:     #d97706;
+  --sidebar-ring: #d97706;
+
+  /* Destructive */
+  --destructive: #ef4444;
+
+  /* Charts */
+  --chart-1: #f59e0b;
+  --chart-2: #3b82f6;
+  --chart-3: #22c55e;
+  --chart-4: #a855f7;
+  --chart-5: #f97316;
+
+  --radius: 0.625rem;
+}
+
+/* ================================================================
+   MODO OSCURO
+   ================================================================ */
+.dark {
+  --background:  #0a0a12;
+  --foreground:  #f5f5fa;
+  --card:        #12121a;
+  --card-foreground: #f5f5fa;
+  --popover:     #1a1a24;
+  --popover-foreground: #f5f5fa;
+  --primary:     #f59e0b;
+  --primary-foreground: #111118;
+  --secondary:   #1e1e2a;
+  --secondary-foreground: #f5f5fa;
+  --muted:       #1e1e2a;
+  --muted-foreground: #8b8b9e;
+  --accent:      #f59e0b;
+  --accent-foreground: #111118;
+  --destructive: #f87171;
+  --border:      rgba(255, 255, 255, 0.08);
+  --input:       rgba(255, 255, 255, 0.10);
+  --ring:        #f59e0b;
+  --sidebar:           #0d0d16;
+  --sidebar-foreground:#f5f5fa;
+  --sidebar-primary:   #f59e0b;
+  --sidebar-primary-foreground: #111118;
+  --sidebar-accent:    #1e1e2a;
+  --sidebar-accent-foreground: #f5f5fa;
+  --sidebar-border:    rgba(255, 255, 255, 0.08);
+  --sidebar-ring:      #f59e0b;
+  --chart-1: #f59e0b;
+  --chart-2: #3b82f6;
+  --chart-3: #22c55e;
+  --chart-4: #a855f7;
+  --chart-5: #f97316;
+}
+
+/* ================================================================
+   BASE
+   ================================================================ */
+@layer base {
+  * { @apply border-border outline-ring/50; }
+
+  /* Garantizar blanco puro en modo claro — sobreescribe cualquier herencia */
+  html, body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  body { @apply font-sans; }
+  /* Eliminar transicion de colores al cambiar tema para evitar parpadeo */
+  html.changing-theme * { transition: none !important; }
+}
+
+/* ================================================================
+   SOMBRAS SUTILES EN CARDS — solo modo claro
+   Las tarjetas son blancas sobre fondo blanco → se diferencian por sombra
+   ================================================================ */
+@layer base {
+  :root:not(.dark) .rounded-xl.border,
+  :root:not(.dark) .rounded-2xl.border {
+    box-shadow: 0 1px 3px 0 rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+}
+
+/* ================================================================
+   SCROLLBAR
+   ================================================================ */
+@layer base {
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.30); }
+  .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
+  .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
+}
+
+/* ================================================================
+   ANIMACIONES
+   ================================================================ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up  { animation: fadeInUp 0.4s ease-out forwards; }
+.animate-fade-in     { animation: fadeIn 0.25s ease-out forwards; }
+.animate-scale-in    { animation: scaleIn 0.28s ease-out forwards; }
+.animate-slide-in-up { animation: slideInUp 0.32s ease-out forwards; }
+
+.stagger-children > * { opacity: 0; animation: fadeInUp 0.38s ease-out forwards; }
+.stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2)  { animation-delay: 55ms; }
+.stagger-children > *:nth-child(3)  { animation-delay: 110ms; }
+.stagger-children > *:nth-child(4)  { animation-delay: 165ms; }
+.stagger-children > *:nth-child(5)  { animation-delay: 220ms; }
+.stagger-children > *:nth-child(6)  { animation-delay: 275ms; }
+.stagger-children > *:nth-child(7)  { animation-delay: 330ms; }
+.stagger-children > *:nth-child(8)  { animation-delay: 385ms; }
+.stagger-children > *:nth-child(9)  { animation-delay: 440ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 495ms; }
+
+/* ================================================================
+   RESPONSIVE MÓVIL — ajustes globales
+   ================================================================ */
+@layer utilities {
+  /* Tablas: scroll horizontal en móvil */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Cards grid en móvil: 1 columna mínimo */
+  @media (max-width: 480px) {
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stagger-children { gap: 0.5rem; }
+  }
+}
