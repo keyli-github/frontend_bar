@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+
 import { Header } from '@/components/layout/header';
 import { mockKardex } from '@/lib/mock-data';
 import { Search, Download, ArrowUp, ArrowDown, Zap, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/shared/pagination';
+import { EmptyState } from '@/components/shared/empty-state';
+import { SkeletonTableRows } from '@/components/shared/skeleton-loader';
+import { useEffect, useState } from 'react';
 import { DatePicker } from '@/components/shared/date-picker';
 
 const filters = ['Todos', 'ENTRADA', 'SALIDA', 'AJUSTE', 'TRASLADO'];
@@ -16,11 +21,16 @@ const tipoBadge: Record<string, { bg: string; text: string; icon: React.ReactNod
   TRASLADO: { bg: 'bg-blue-500/10 border-blue-500/30 text-blue-400', text: 'TRASLADO', icon: <ArrowRight size={10} /> },
 };
 
+const PAGE_SIZE_K = 10;
+
 export default function KardexPage() {
+  const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo]   = useState<Date | undefined>();
+
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
   const filtered = mockKardex.filter((k) => {
     const matchFilter = activeFilter === 'Todos' || k.tipo === activeFilter;
@@ -29,6 +39,8 @@ export default function KardexPage() {
       k.id.toLowerCase().includes(searchQuery.toLowerCase());
     return matchFilter && matchSearch;
   });
+
+  const { page, totalPages, total, paginated, goTo, reset } = usePagination(filtered, { pageSize: PAGE_SIZE_K });
 
   const totalEntradas = mockKardex.filter((k) => k.tipo === 'ENTRADA').length;
   const totalSalidas = mockKardex.filter((k) => k.tipo === 'SALIDA').length;
@@ -113,7 +125,7 @@ export default function KardexPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((k) => {
+                {paginated.map((k) => {
                   const badge = tipoBadge[k.tipo];
                   return (
                     <tr key={k.id} className="hover:bg-muted/40 transition-colors">
@@ -143,12 +155,18 @@ export default function KardexPage() {
                       <td className="px-4 py-3 text-foreground font-mono">${k.valor.toLocaleString('es-CO')}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs max-w-[120px] truncate">{k.referencia}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">{k.usuario}</td>
-                    </tr>
+                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          {/* Paginación Kardex */}
+          {!loading && total > PAGE_SIZE_K && (
+            <div className="border-t border-border px-4">
+              <Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE_K} onPageChange={goTo} />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/shared/pagination';
 import { Header } from '@/components/layout/header';
 import { mockPurchaseOrders, mockProveedores } from '@/lib/mock-data';
 import type { PurchaseOrder } from '@/types';
@@ -26,6 +28,8 @@ export default function ComprasPage() {
     if (statusFilter === 'Todas') return true;
     return o.estado === statusFilter.toUpperCase();
   });
+
+  const { page: cPage, totalPages: cPages, total: cTotal, paginated: cPaginated, goTo: cGoTo } = usePagination(filteredOrders, { pageSize: 8 });
 
   const pendientes = mockPurchaseOrders.filter((o) => o.estado === 'PENDIENTE').length;
   const recibidas = mockPurchaseOrders.filter((o) => o.estado === 'RECIBIDA').length;
@@ -122,7 +126,7 @@ export default function ComprasPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredOrders.map((order) => (
+                    {cPaginated.map((order) => (
                       <tr key={order.orden} className="hover:bg-muted/40 transition-colors">
                         <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium">{order.orden}</td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">{order.fecha}</td>

@@ -1,6 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/shared/pagination';
+import { EmptyState } from '@/components/shared/empty-state';
+import { SkeletonTableRows } from '@/components/shared/skeleton-loader';
 import { Header } from '@/components/layout/header';
 import { mockUsers } from '@/lib/mock-data';
 import type { User } from '@/types';
@@ -35,6 +39,8 @@ export default function UsuariosPage() {
     const matchSede = sedeFilter === 'Todas las sedes' || u.sede === sedeFilter;
     return matchRole && matchSearch && matchSede;
   });
+
+  const { page: uPage, totalPages: uPages, total: uTotal, paginated: uPaginated, goTo: uGoTo, reset: uReset } = usePagination(filtered, { pageSize: 8 });
 
   const superadmins = mockUsers.filter((u) => u.role === 'superadmin').length;
   const admins = mockUsers.filter((u) => u.role === 'administrador').length;
@@ -133,7 +139,7 @@ export default function UsuariosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((user) => (
+                {uPaginated.map((user) => (
                   <tr key={user.id} className="hover:bg-muted/40 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">

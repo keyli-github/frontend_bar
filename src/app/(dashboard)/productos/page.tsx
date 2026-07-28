@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { usePagination } from '@/hooks/use-pagination';
+import { Pagination } from '@/components/shared/pagination';
+import { SkeletonProductGrid } from '@/components/shared/skeleton-loader';
 import Image from 'next/image';
 import { Header } from '@/components/layout/header';
 import { useProductStore } from '@/store/product-store';
@@ -384,6 +387,9 @@ export default function ProductosPage() {
     return matchSearch && matchCat && matchStatus;
   }), [products, search, catFilter, statusFilter]);
 
+  const VIEW_SIZE = view === 'grid' ? 15 : 12;
+  const { page: pPage, totalPages: pPages, total: pTotal, paginated: pPaginated, goTo: pGoTo, reset: pReset } = usePagination(filtered, { pageSize: VIEW_SIZE });
+
   const stats = useMemo(() => ({
     total:    products.length,
     activos:  products.filter((p) => p.status === 'active').length,
@@ -471,7 +477,7 @@ export default function ProductosPage() {
           {/* Status filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+            onChange={(e) => { pReset(); setStatusFilter(e.target.value as 'all' | 'active' | 'inactive'); }}
             className="h-9 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all"
           >
             <option value="all">Todos los estados</option>
@@ -499,7 +505,7 @@ export default function ProductosPage() {
         {/* ── GRID VIEW ── */}
         {view === 'grid' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 stagger-children">
-            {filtered.map((p) => (
+            {pPaginated.map((p) => (
               <ProductCard
                 key={p.id} product={p}
                 canEdit={canEdit} canDelete={canDelete}
@@ -509,7 +515,7 @@ export default function ProductosPage() {
                 onTogglePOS={() => togglePOS(p.id)}
               />
             ))}
-            {filtered.length === 0 && (
+            {pTotal === 0 && (
               <div className="col-span-full py-20 text-center text-muted-foreground">
                 <Package size={40} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No se encontraron productos</p>
@@ -533,7 +539,7 @@ export default function ProductosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filtered.map((p) => (
+                  {pPaginated.map((p) => (
                     <tr key={p.id} className={cn('hover:bg-muted/30 transition-colors', p.status === 'inactive' && 'opacity-50')}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
