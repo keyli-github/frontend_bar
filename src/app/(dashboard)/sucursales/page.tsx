@@ -1,281 +1,429 @@
 'use client';
 
-import { useState } from 'react';
-import { Header } from '@/components/layout/header';
-import { mockSucursales } from '@/lib/mock-data';
-import { Plus, X, MapPin, Users, TrendingUp, Calendar, Building2, ChevronDown } from 'lucide-react';
+/**
+ * Gestion de sedes — `EstablecimientosController`.
+ *
+ *   GET    /api/establecimientos       (permiso `establecimientos:leer`)
+ *   POST   /api/establecimientos       (permiso `establecimientos:crear`)
+ *   PATCH  /api/establecimientos/:id   (permiso `establecimientos:editar`)
+ *   DELETE /api/establecimientos/:id   (permiso `establecimientos:editar`)
+ *
+ * Reglas del backend reflejadas en la UI:
+ *   - Un no-SUPERADMIN solo recibe su propia sede (lo filtra el servidor).
+ *   - No se puede desactivar ni borrar una sede con usuarios asignados.
+ *   - El RUC, si se envia, debe tener exactamente 11 digitos.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Pagination } from '@/components/shared/pagination';
+import { useAuthStore } from '@/store/auth-store';
+import { establecimientosApi, ApiError } from '@/lib/api';
+import { can, hasPermission } from '@/lib/roles';
+import type { Establecimiento } from '@/types/api';
+import { Plus, X, Building2, Users, MapPin, Phone, Trash2, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Bones, BoneCards } from '@/components/shared/bones';
+import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
 
-const barColors: Record<string, string> = { 'Zona Rosa': '#f59e0b', Chapinero: '#3b82f6', 'El Poblado': '#22c55e' };
+const inputClass =
+  'w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 transition-all text-sm';
+const labelClass = 'text-xs text-muted-foreground uppercase tracking-wider';
+const PAGE_SIZE = 25;
 
-const estadoStyle: Record<string, string> = {
-  ACTIVA: 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400',
-  'EN CONSTRUCCION': 'bg-purple-500/10 border-purple-500/25 text-purple-500',
-};
+const errMsg = (e: unknown, fallback: string) =>
+  e instanceof ApiError ? e.message : fallback;
 
 export default function SucursalesPage() {
-  const [showNewSede, setShowNewSede] = useState(false);
-  const activas = mockSucursales.filter((s) => s.estado === 'ACTIVA').length;
+  const permisos = useAuthStore((s) => s.permisos);
+  const boneyardBuild = useBoneyardBuild();
+  const puedeLeer =
+    boneyardBuild || hasPermission(permisos, 'establecimientos:leer');
+  const puedeCrear = boneyardBuild || can(permisos, 'sucursales', 'create');
+  const puedeEditar = boneyardBuild || can(permisos, 'sucursales', 'edit');
+
+  const [sedes, setSedes] = useState<Establecimiento[]>([]);
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [creando, setCreando] = useState(false);
+  const [editando, setEditando] = useState<Establecimiento | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    establecimientosApi
+      .listEstablecimientos({ pagina, limite: PAGE_SIZE })
+      .then((result) => {
+        if (cancelled) return;
+        setSedes(result.data);
+        setTotal(result.total);
+        setTotalPaginas(result.totalPaginas || 1);
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(errMsg(e, 'No se pudieron cargar las sedes.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pagina, reloadToken]);
+
+  const recargar = useCallback(() => {
+    setLoading(true);
+    setReloadToken((n) => n + 1);
+  }, []);
+
+  const irAPagina = useCallback((page: number) => {
+    setLoading(true);
+    setPagina(page);
+  }, []);
+
+  const eliminar = async (sede: Establecimiento) => {
+    if (sede._count.usuarios > 0) {
+      toast.error(`"${sede.nombre}" tiene ${sede._count.usuarios} usuario(s) asignado(s).`);
+      return;
+    }
+    if (!confirm(`¿Eliminar la sede ${sede.nombre}? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await establecimientosApi.deleteEstablecimiento(sede.id);
+      toast.success(res.message);
+      recargar();
+    } catch (e) {
+      toast.error(errMsg(e, 'No se pudo eliminar la sede.'));
+    }
+  };
+
+  const totalUsuarios = sedes.reduce((n, s) => n + s._count.usuarios, 0);
+  const activas = sedes.filter((s) => s.activo).length;
+
+  if (!puedeLeer) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">
+          No tienes permiso para ver las sedes.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
-      <Header title="Sucursales" />
-
-      <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up">
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold text-foreground">Sucursales</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Red Bar beer · {activas} sedes operativas</p>
-          </div>
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Sucursales</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {total} sede{total === 1 ? '' : 's'} · {activas} activa
+            {activas === 1 ? '' : 's'} · {totalUsuarios} usuario
+            {totalUsuarios === 1 ? '' : 's'}
+          </p>
+        </div>
+        {puedeCrear && (
           <button
-            onClick={() => setShowNewSede(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all active:scale-[0.98] w-fit"
+            type="button"
+            onClick={() => setCreando(true)}
+            className="flex w-fit items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold tracking-wide text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98]"
           >
-            <Plus size={16} /> AGREGAR SEDE
+            <Plus size={16} /> NUEVA SEDE
           </button>
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
-          {[
-            { label: 'SEDES ACTIVAS', value: String(activas), icon: <Building2 size={16} />, color: 'text-foreground' },
-            { label: 'EMPLEADOS', value: '31', icon: <Users size={16} />, color: 'text-foreground' },
-            { label: 'VENTAS JULIO', value: '$112.6M', icon: <TrendingUp size={16} />, color: 'text-amber-500' },
-            { label: 'CAPACIDAD', value: '500', icon: <MapPin size={16} />, color: 'text-blue-500' },
-          ].map((k) => (
-            <div key={k.label} className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground flex-shrink-0">{k.icon}</div>
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground tracking-widest uppercase">{k.label}</p>
-                <p className={cn('text-base lg:text-lg font-bold font-mono mt-0.5', k.color)}>{k.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Sede cards — horizontal layout */}
-        <div className="space-y-3 stagger-children">
-          {mockSucursales.map((sede) => (
-            <div
-              key={sede.id}
-              className={cn(
-                'rounded-xl border bg-card overflow-hidden transition-all hover:shadow-md dark:hover:shadow-white/5',
-                sede.estado === 'ACTIVA' ? 'border-border' : 'border-dashed border-purple-500/30'
-              )}
-            >
-              <div className="flex flex-col md:flex-row">
-                {/* Left: color bar + info */}
-                <div className="flex-1 p-4 lg:p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg', sede.color)}>
-                        <Building2 size={18} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-foreground text-base">{sede.nombre}</h3>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <MapPin size={11} /> {sede.ciudad} · {sede.direccion}
-                        </p>
-                      </div>
-                    </div>
-                    <span className={cn('px-2.5 py-0.5 rounded-full border text-[10px] font-bold', estadoStyle[sede.estado])}>
-                      {sede.estado === 'ACTIVA' ? 'Activa' : 'En construcción'}
-                    </span>
-                  </div>
-
-                  {sede.estado === 'ACTIVA' ? (
-                    <div className="flex flex-wrap gap-4 mt-3">
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Ventas hoy</p>
-                        <p className="text-sm font-bold text-amber-500">{sede.ventasHoy}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Empleados</p>
-                        <p className="text-sm font-bold text-foreground">{sede.empleados}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Ticket prom.</p>
-                        <p className="text-sm font-bold text-foreground">{sede.ticketProm}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Participación</p>
-                        <p className="text-sm font-bold text-foreground">{sede.participacion}%</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
-                      <Calendar size={14} className="text-purple-500" />
-                      Apertura estimada: <span className="text-purple-500 font-semibold">Sep 2026</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Right: progress bar + admin */}
-                {sede.estado === 'ACTIVA' && (
-                  <div className="flex flex-col justify-center px-4 py-3 md:px-5 md:w-64 border-t md:border-t-0 md:border-l border-border">
-                    <div className="mb-2">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Participación mes</span>
-                        <span className="font-bold" style={{ color: barColors[sede.nombre] }}>{sede.participacion}%</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${sede.participacion}%`, backgroundColor: barColors[sede.nombre] }} />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
-                      <Users size={11} /> {sede.administrador}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{sede.desde}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Chart — Barras horizontales con filtro de mes */}
-        <ChartVentasSucursales />
+        )}
       </div>
 
-      {/* Modal Nueva Sede */}
-      {showNewSede && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNewSede(false)} />
-          <div className="relative w-full max-w-md bg-popover border border-border rounded-2xl p-6 animate-scale-in">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-bold text-foreground text-lg">NUEVA SEDE</h3>
-              <button onClick={() => setShowNewSede(false)}><X size={20} className="text-muted-foreground" /></button>
-            </div>
-            <div className="space-y-4">
-              {[
-                { label: 'Nombre de la sede', placeholder: 'Ej: Santa Marta' },
-                { label: 'Ciudad', placeholder: 'Ej: Santa Marta' },
-                { label: 'Dirección', placeholder: 'Ej: Cra 1 #18-20, El Rodadero' },
-                { label: 'Administrador', placeholder: 'Nombre del encargado' },
-                { label: 'Teléfono', placeholder: '+57 300 000 0000' },
-              ].map((f) => (
-                <div key={f.label}>
-                  <label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{f.label}</label>
-                  <input placeholder={f.placeholder} className="w-full mt-1.5 h-10 px-3 rounded-lg bg-muted/50 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50 transition-all text-sm" />
+      {error && (
+        <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      <Bones
+        name="sucursales-grid"
+        loading={loading}
+        placeholder={<BoneCards count={4} />}
+      >
+        {sedes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No hay sedes registradas.</p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 stagger-children">
+          {sedes.map((sede) => (
+            <div key={sede.id} className="surface flex flex-col gap-4 p-5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Building2 size={16} className="shrink-0 text-primary-text" />
+                  <h2 className="truncate font-semibold text-foreground">{sede.nombre}</h2>
                 </div>
-              ))}
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowNewSede(false)} className="flex-1 h-10 rounded-xl bg-muted/50 border border-border text-foreground text-sm hover:bg-muted transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={() => setShowNewSede(false)} className="flex-1 h-10 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all">
-                  CREAR SEDE
-                </button>
+                <span
+                  className={cn(
+                    'shrink-0 rounded border px-2 py-0.5 text-[10px] font-bold',
+                    sede.activo
+                      ? 'border-success/25 bg-success/10 text-success'
+                      : 'border-border bg-muted text-muted-foreground',
+                  )}
+                >
+                  {sede.activo ? 'ACTIVA' : 'INACTIVA'}
+                </span>
               </div>
+
+              <dl className="space-y-1.5 text-xs text-muted-foreground">
+                <div className="flex items-start gap-2">
+                  <MapPin size={12} className="mt-0.5 shrink-0" />
+                  <dd className="min-w-0">{sede.direccion ?? 'Sin dirección'}</dd>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone size={12} className="shrink-0" />
+                  <dd>{sede.telefono ?? 'Sin teléfono'}</dd>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users size={12} className="shrink-0" />
+                  <dd>
+                    {sede._count.usuarios} usuario{sede._count.usuarios === 1 ? '' : 's'}
+                  </dd>
+                </div>
+                {sede.ruc && (
+                  <div className="pt-0.5 font-mono text-[11px]">RUC {sede.ruc}</div>
+                )}
+              </dl>
+
+              {puedeEditar && (
+                <div className="mt-auto flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditando(sede)}
+                    className="flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-text transition-colors hover:bg-primary/20"
+                  >
+                    <Pencil size={12} /> Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void eliminar(sede)}
+                    disabled={sede._count.usuarios > 0}
+                    title={
+                      sede._count.usuarios > 0
+                        ? 'Tiene usuarios asignados'
+                        : 'Eliminar sede'
+                    }
+                    className="flex items-center gap-1 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          ))}
         </div>
+      )}
+      </Bones>
+
+      <Pagination
+        page={pagina}
+        totalPages={totalPaginas}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={irAPagina}
+      />
+
+      {(creando || editando) && (
+        <SedeFormModal
+          sede={editando ?? undefined}
+          onClose={() => {
+            setCreando(false);
+            setEditando(null);
+          }}
+          onDone={() => {
+            setCreando(false);
+            setEditando(null);
+            recargar();
+          }}
+        />
       )}
     </div>
   );
 }
 
-/* ─── CHART HORIZONTAL CON FILTRO DE MESES ─── */
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+// ============================================================
+// ALTA / EDICION
+// ============================================================
 
-const ventasPorMes: Record<string, { sede: string; ventas: number; color: string }[]> = {
-  Julio: [
-    { sede: 'Zona Rosa',  ventas: 48600000, color: '#f59e0b' },
-    { sede: 'Chapinero',  ventas: 35700000, color: '#d4a017' },
-    { sede: 'El Poblado', ventas: 28300000, color: '#b8860b' },
-  ],
-  Junio: [
-    { sede: 'Zona Rosa',  ventas: 42100000, color: '#f59e0b' },
-    { sede: 'Chapinero',  ventas: 31200000, color: '#d4a017' },
-    { sede: 'El Poblado', ventas: 25800000, color: '#b8860b' },
-  ],
-  Mayo: [
-    { sede: 'Zona Rosa',  ventas: 39500000, color: '#f59e0b' },
-    { sede: 'Chapinero',  ventas: 28900000, color: '#d4a017' },
-    { sede: 'El Poblado', ventas: 22100000, color: '#b8860b' },
-  ],
-};
+function SedeFormModal({
+  sede,
+  onClose,
+  onDone,
+}: {
+  sede?: Establecimiento;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const isCreate = !sede;
+  const [nombre, setNombre] = useState(sede?.nombre ?? '');
+  const [direccion, setDireccion] = useState(sede?.direccion ?? '');
+  const [telefono, setTelefono] = useState(sede?.telefono ?? '');
+  const [ruc, setRuc] = useState(sede?.ruc ?? '');
+  const [activo, setActivo] = useState(sede?.activo ?? true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-function ChartVentasSucursales() {
-  const [selectedMonth, setSelectedMonth] = useState('Julio');
-  const [dropOpen, setDropOpen] = useState(false);
+  /** Mismo criterio que el @Matches del DTO: 11 digitos, o vacio. */
+  const rucOk = ruc === '' || /^\d{11}$/.test(ruc);
 
-  const data = ventasPorMes[selectedMonth] || ventasPorMes['Julio'];
-  const maxVenta = Math.max(...data.map((d) => d.ventas));
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rucOk) return;
+    setSaving(true);
+    setError(null);
 
-  const fmt = (n: number) => {
-    if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'K';
-    return '$' + n;
+    // Se envian las cadenas aunque esten vacias: es la unica forma de BORRAR
+    // un campo. Con `|| undefined` la clave desaparecia del JSON y el backend
+    // (que solo mira `!== undefined`) dejaba el valor anterior intacto, asi
+    // que vaciar la direccion o el telefono no tenia ningun efecto.
+    const payload = {
+      nombre: nombre.trim(),
+      direccion: direccion.trim(),
+      telefono: telefono.trim(),
+      ruc: ruc.trim(),
+    };
+
+    try {
+      if (isCreate) {
+        await establecimientosApi.createEstablecimiento(payload);
+        toast.success('Sede creada');
+      } else {
+        await establecimientosApi.updateEstablecimiento(sede.id, {
+          ...payload,
+          activo,
+        });
+        toast.success('Sede actualizada');
+      }
+      onDone();
+    } catch (e) {
+      setError(errMsg(e, 'No se pudo guardar la sede.'));
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 animate-fade-in-up">
-      {/* Header con filtro */}
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <h2 className="font-semibold text-foreground">
-            Ventas por Sucursal — <span className="text-amber-500">{selectedMonth}</span>
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Vista consolidada de ventas por sucursales</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <form onSubmit={submit} className="surface-overlay relative w-full max-w-md animate-scale-in p-6">
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-foreground">
+            {isCreate ? 'NUEVA SEDE' : 'EDITAR SEDE'}
+          </h3>
+          <button type="button" onClick={onClose} aria-label="Cerrar">
+            <X size={20} className="text-muted-foreground" />
+          </button>
         </div>
 
-        {/* Dropdown mes */}
-        <div className="relative">
-          <button
-            onClick={() => setDropOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted/50 text-sm text-foreground hover:bg-muted transition-colors"
-          >
-            {selectedMonth}
-            <ChevronDown size={13} className={cn('text-muted-foreground transition-transform', dropOpen && 'rotate-180')} />
-          </button>
-          {dropOpen && (
-            <div className="absolute right-0 top-full mt-1 w-40 bg-popover border border-border rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto animate-scale-in">
-              {MESES.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => { setSelectedMonth(m); setDropOpen(false); }}
-                  className={cn(
-                    'w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors',
-                    m === selectedMonth ? 'text-amber-500 font-medium' : 'text-foreground'
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="s-nombre" className={labelClass}>
+              Nombre
+            </label>
+            <input
+              id="s-nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Zona Rosa"
+              maxLength={100}
+              required
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="s-direccion" className={labelClass}>
+              Dirección
+            </label>
+            <input
+              id="s-direccion"
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              placeholder="Av. Principal 123"
+              maxLength={200}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="s-telefono" className={labelClass}>
+                Teléfono
+              </label>
+              <input
+                id="s-telefono"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                placeholder="+51 999 999 999"
+                maxLength={20}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="s-ruc" className={labelClass}>
+                RUC
+              </label>
+              <input
+                id="s-ruc"
+                value={ruc}
+                onChange={(e) => setRuc(e.target.value.replace(/\D/g, ''))}
+                placeholder="20123456789"
+                inputMode="numeric"
+                maxLength={11}
+                className={cn(inputClass, 'font-mono')}
+              />
+              {!rucOk && (
+                <p className="mt-1.5 text-[11px] text-destructive">
+                  Deben ser 11 dígitos.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {!isCreate && (
+            <div>
+              <label htmlFor="s-activo" className={labelClass}>
+                Estado
+              </label>
+              <select
+                id="s-activo"
+                value={activo ? '1' : '0'}
+                onChange={(e) => setActivo(e.target.value === '1')}
+                className={inputClass}
+              >
+                <option value="1">Activa</option>
+                <option value="0">Inactiva</option>
+              </select>
+              {sede._count.usuarios > 0 && !activo && (
+                <p className="mt-1.5 text-[11px] text-destructive">
+                  El servidor rechazará desactivarla: tiene {sede._count.usuarios}{' '}
+                  usuario(s).
+                </p>
+              )}
             </div>
           )}
+
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="h-10 flex-1 rounded-lg border border-border bg-muted/60 text-sm text-foreground transition-colors hover:bg-muted">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !rucOk}
+              className="h-10 flex-1 rounded-lg bg-primary text-sm font-bold tracking-wide text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+            >
+              {saving ? 'GUARDANDO…' : isCreate ? 'CREAR' : 'GUARDAR'}
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Barras horizontales */}
-      <div className="space-y-4">
-        {data.map((item) => {
-          const pct = (item.ventas / maxVenta) * 100;
-          return (
-            <div key={item.sede} className="flex items-center gap-3">
-              <span className="text-sm text-foreground font-medium w-28 flex-shrink-0 truncate">{item.sede}</span>
-              <div className="flex-1 h-7 bg-muted/50 rounded-full overflow-hidden relative">
-                <div
-                  className="h-full rounded-full transition-all duration-700 ease-out"
-                  style={{
-                    width: `${pct}%`,
-                    background: `linear-gradient(90deg, ${item.color} 0%, ${item.color}CC 100%)`,
-                  }}
-                />
-              </div>
-              <span className="text-sm font-bold text-foreground w-16 text-right font-mono">{fmt(item.ventas)}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Línea punteada vertical como referencia */}
-      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
-        <div className="w-3 h-0.5 border-b border-dashed border-amber-500" />
-        <span className="text-[10px] text-muted-foreground">Meta mensual: $50M</span>
-      </div>
+      </form>
     </div>
   );
 }

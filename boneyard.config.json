@@ -1,8 +1,29 @@
 {
   "breakpoints": [375, 768, 1280],
   "out": "./src/bones",
-  "wait": 1200,
-  "color": "rgba(0,0,0,0.07)",
-  "darkColor": "rgba(255,255,255,0.06)",
-  "animate": "shimmer"
+  "wait": 2200,
+  "routes": [
+    "/dashboard",
+    "/usuarios",
+    "/sucursales",
+    "/roles",
+    "/permisos",
+    "/auditoria",
+    "/perfil"
+  ],
+  "color": "rgba(15, 23, 42, 0.08)",
+  "darkColor": "rgba(255, 255, 255, 0.07)",
+  "animate": "shimmer",
+  "shimmerColor": "rgba(255, 255, 255, 0.24)",
+  "darkShimmerColor": "rgba(255, 255, 255, 0.13)",
+  "speed": "1.8s",
+  "stagger": 28,
+  "transition": 240,
+  "select": "viewport",
+  "resolveEnvVars": true,
+  "auth": {
+    "headers": {
+      "Authorization": "Bearer env[BONEYARD_ACCESS_TOKEN]"
+    }
+  }
 }

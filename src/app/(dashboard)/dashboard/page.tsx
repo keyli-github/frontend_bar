@@ -1,276 +1,367 @@
 'use client';
 
-import { Header } from '@/components/layout/header';
-import { StatCard } from '@/components/shared/stat-card';
-import { mockSales, mockTopProducts, mockSalesBySede } from '@/lib/mock-data';
-import { getSedeStats } from '@/lib/sede-data';
-import { useUIStore } from '@/store/ui-store';
+/**
+ * Dashboard.
+ *
+ * Todo lo que se pinta aqui sale de la API; no hay datos simulados. Cada
+ * bloque se carga solo si el JWT trae el permiso correspondiente, de modo que
+ * un CAJERO ve una portada minima en lugar de tarjetas vacias o errores 403.
+ *
+ * Fuentes:
+ *   GET /api/roles          -> usuarios por rol   (roles:leer)
+ *   GET /api/establecimientos -> sedes            (establecimientos:leer)
+ *   GET /api/audit          -> actividad reciente (audit:leer)
+ *   GET /api/auth/sesiones  -> dispositivos propios
+ */
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuthStore } from '@/store/auth-store';
-import { useProductStore } from '@/store/product-store';
-import { DollarSign, TrendingUp, AlertTriangle, Users2 } from 'lucide-react';
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
-} from 'recharts';
+import { rolesApi, establecimientosApi, auditApi, authApi } from '@/lib/api';
+import { getRoleLabel, hasPermission } from '@/lib/roles';
+import type { AuditLog, Establecimiento, Rol, SessionInfo } from '@/types/api';
+import { Users, Building2, ScrollText, Shield, Monitor, ArrowRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Bones, BoneBars, BoneKpis, BoneList } from '@/components/shared/bones';
+import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
 
-const paymentColors: Record<string, string> = {
-  Tarjeta: 'bg-purple-500/15 text-purple-400',
-  Efectivo: 'bg-emerald-500/15 text-emerald-400',
-  Transferencia: 'bg-blue-500/15 text-blue-400',
-};
+const dateFmt = new Intl.DateTimeFormat('es-PE', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
 
-const tickStyle = { fill: 'var(--color-muted-foreground)', fontSize: 11 };
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
+
+function accionTone(accion: string): string {
+  if (accion.includes('ELIMINAR') || accion.includes('BLOQUEADA') || accion.includes('REUSO'))
+    return 'text-destructive';
+  if (accion.includes('CREAR')) return 'text-success';
+  return 'text-muted-foreground';
+}
 
 export default function DashboardPage() {
-  const { selectedSede } = useUIStore();
-  const { user } = useAuthStore();
-  const { products } = useProductStore();
+  const user = useAuthStore((s) => s.user);
+  const permisos = useAuthStore((s) => s.permisos);
+  const boneyardBuild = useBoneyardBuild();
 
-  // Datos filtrados por sede
-  const stats = getSedeStats(selectedSede);
-  const activeProducts = products.filter((p) => p.status === 'active').length;
-  const criticalProducts = products.filter(
-    (p) => p.status === 'active' && p.availableInPOS
-  ).length;
+  const verRoles = boneyardBuild || hasPermission(permisos, 'roles:leer');
+  const verSedes =
+    boneyardBuild || hasPermission(permisos, 'establecimientos:leer');
+  const verAudit = boneyardBuild || hasPermission(permisos, 'audit:leer');
 
-  const greeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Buenos días';
-    if (h < 18) return 'Buenas tardes';
-    return 'Buenas noches';
-  };
+  const [roles, setRoles] = useState<Rol[] | null>(null);
+  const [sedes, setSedes] = useState<Establecimiento[] | null>(null);
+  const [logs, setLogs] = useState<AuditLog[] | null>(null);
+  const [sesiones, setSesiones] = useState<SessionInfo[] | null>(null);
 
-  const sedeLabel = selectedSede === 'Todas las sedes' ? 'todas las sedes' : selectedSede;
-  const today = new Date().toLocaleDateString('es-CO', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
+  // Cada bloque se pide solo si hay permiso; los fallos se degradan a `[]`
+  // para que una seccion caida no tumbe la portada entera.
+  useEffect(() => {
+    let cancelled = false;
+    if (!verRoles) return;
+    rolesApi
+      .listRoles({ limite: 100 })
+      .then((d) => !cancelled && setRoles(d.data))
+      .catch(() => !cancelled && setRoles([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [verRoles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!verSedes) return;
+    establecimientosApi
+      .listEstablecimientos({ limite: 100 })
+      .then((d) => !cancelled && setSedes(d.data))
+      .catch(() => !cancelled && setSedes([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [verSedes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!verAudit) return;
+    auditApi
+      .listAuditLogs({ pagina: 1, limite: 8 })
+      .then((d) => !cancelled && setLogs(d.data))
+      .catch(() => !cancelled && setLogs([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [verAudit]);
+
+  useEffect(() => {
+    let cancelled = false;
+    authApi
+      .getSesiones()
+      .then((d) => !cancelled && setSesiones(d))
+      .catch(() => !cancelled && setSesiones([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const totalUsuarios = roles?.reduce((n, r) => n + r._count.usuarios, 0) ?? null;
+  const sedesActivas = sedes?.filter((s) => s.activo).length ?? null;
+
+  const kpis = [
+    verRoles && {
+      label: 'Usuarios',
+      value: totalUsuarios,
+      icon: Users,
+      href: '/usuarios',
+    },
+    verRoles && {
+      label: 'Roles',
+      value: roles?.length ?? null,
+      icon: Shield,
+      href: '/roles',
+    },
+    verSedes && {
+      label: 'Sedes activas',
+      value: sedesActivas,
+      icon: Building2,
+      href: '/sucursales',
+    },
+    {
+      label: 'Sesiones activas',
+      value: sesiones?.length ?? null,
+      icon: Monitor,
+      href: '/perfil',
+    },
+  ].filter(Boolean) as {
+    label: string;
+    value: number | null;
+    icon: React.ElementType;
+    href: string;
+  }[];
+
+  // Cada bloque espera solo a su propia fuente, para que la portada aparezca
+  // por partes en lugar de bloquearse hasta la peticion mas lenta.
+  const kpisCargando =
+    sesiones === null ||
+    (verRoles && roles === null) ||
+    (verSedes && sedes === null);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
-      <Header title="Dashboard" />
+    <div className="space-y-5 p-4 lg:p-6">
+      {/* ── Saludo ── */}
+      <div className="animate-fade-in-up">
+        <h1 className="text-xl font-bold text-foreground lg:text-2xl">
+          {greeting()}, {user?.username ?? 'Usuario'} 👋
+        </h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          {user ? getRoleLabel(user.rol) : ''}
+          {user?.sede ? ` · ${user.sede}` : ' · Acceso global'}
+        </p>
+      </div>
 
-      <div className="p-4 lg:p-6 space-y-5 stagger-children">
-        {/* Greeting */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h1 className="text-xl lg:text-2xl font-bold text-foreground">
-              {greeting()}, {user?.name?.split(' ')[0] || 'Carlos'} 👋
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {sedeLabel} · {today}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              CAJA ABIERTA
-            </span>
-            {selectedSede !== 'Todas las sedes' && selectedSede !== 'Todas' && (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/20">
-                {selectedSede}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard
-            label="Ventas Hoy"
-            value={stats.ventasHoy}
-            subtitle={`${stats.tickets} tickets emitidos`}
-            icon={<DollarSign size={16} />}
-            badge={{ text: '+18%', type: 'success' }}
-          />
-          <StatCard
-            label="Ticket Promedio"
-            value={stats.ticketProm}
-            subtitle="+17% vs semana pasada"
-            icon={<TrendingUp size={16} />}
-            badge={{ text: '+17%', type: 'success' }}
-          />
-          <StatCard
-            label="Artículos Críticos"
-            value={String(stats.articulosCriticos)}
-            subtitle="Requieren reposición"
-            icon={<AlertTriangle size={16} />}
-            badge={{ text: `${stats.articulosCriticos} alertas`, type: 'danger' }}
-          />
-          <StatCard
-            label="Empleados Activos"
-            value={String(stats.empleadosActivos)}
-            subtitle={`De ${stats.empleadosTotal} programados hoy`}
-            icon={<Users2 size={16} />}
-            badge={{ text: 'turno noche', type: 'info' }}
-          />
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Area Chart */}
-          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Ventas de la semana</h3>
-                <p className="text-xs text-muted-foreground">{sedeLabel} · COP</p>
-              </div>
-              <span className="text-xs font-mono text-amber-500">{stats.ventasHoy}</span>
-            </div>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.weeklySales} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={tickStyle} />
-                  <YAxis axisLine={false} tickLine={false} tick={tickStyle} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} width={40} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--color-popover)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-foreground)' }}
-                    formatter={(v) => [`$${((Number(v) || 0) / 1000000).toFixed(2)}M`, 'Ventas']}
-                  />
-                  <Area type="monotone" dataKey="amount" stroke="#f59e0b" strokeWidth={2} fill="url(#sg)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Pie Chart */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold text-foreground mb-1">Ventas por sede</h3>
-            <p className="text-xs text-muted-foreground mb-3">Distribución hoy</p>
-            <div className="h-[150px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={mockSalesBySede} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">
-                    {mockSalesBySede.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ background: 'var(--color-popover)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-foreground)' }}
-                    formatter={(v) => [`${v}%`, 'Participación']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-1.5 mt-2">
-              {mockSalesBySede.map((s) => (
-                <div key={s.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                    <span className="text-muted-foreground">{s.name}</span>
-                  </div>
-                  <span className="font-mono text-foreground">{s.value}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Top Products */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-foreground">Top productos hoy</h3>
-              <span className="text-xs text-muted-foreground">{activeProducts} activos</span>
-            </div>
-            <div className="space-y-3">
-              {mockTopProducts.slice(0, 5).map((p) => (
-                <div key={p.rank} className="flex items-center gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-amber-500/15 text-amber-500 text-[9px] font-bold flex items-center justify-center flex-shrink-0">{p.rank}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-xs text-foreground truncate">{p.name}</span>
-                      <span className="text-[10px] text-muted-foreground ml-1">{p.units}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted/60">
-                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${p.percentage}%` }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Sales */}
-          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4 overflow-hidden">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Últimas ventas — {sedeLabel}</h3>
-            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-              <table className="w-full text-xs min-w-[480px]">
-                <thead>
-                  <tr className="text-muted-foreground border-b border-border">
-                    {['Ticket', 'Hora', 'Arts.', 'Total', 'Método', 'Cajero'].map((h) => (
-                      <th key={h} className="pb-2 font-medium text-left last:text-right">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {mockSales.map((sale) => (
-                    <tr key={sale.ticket} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="py-2 font-mono text-amber-500">{sale.ticket}</td>
-                      <td className="py-2 text-muted-foreground">{sale.hora}</td>
-                      <td className="py-2 text-foreground">{sale.articulos}</td>
-                      <td className="py-2 font-mono font-semibold text-foreground">${(sale.total / 1000).toFixed(0)}k</td>
-                      <td className="py-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${paymentColors[sale.metodo]}`}>{sale.metodo}</span>
-                      </td>
-                      <td className="py-2 text-right text-muted-foreground">{sale.cajero}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Inventory Alerts */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-foreground">Alertas de inventario</h3>
-            <span className="text-xs text-red-500 font-medium">{stats.articulosCriticos} críticos</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {[
-              { name: 'Whiskey JW Black 750ml', stock: 2, min: 6, critical: true },
-              { name: 'Tequila Herradura Plata', stock: 3, min: 6, critical: true },
-              { name: 'Coca-Cola 250ml (caja)', stock: 1, min: 4, critical: true },
-              { name: 'Agua Tónica Schweppes', stock: 4, min: 6, critical: false },
-              { name: 'Ron Medellín 8 Años', stock: 5, min: 6, critical: false },
-            ].slice(0, stats.articulosCriticos + 2).map((a) => (
-              <div key={a.name} className={`rounded-xl p-3 bg-card border ${a.critical ? 'border-red-500/25' : 'border-amber-500/20'}`}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${a.critical ? 'bg-red-500/15 text-red-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                    {a.critical ? 'CRÍTICO' : 'ALERTA'}
-                  </span>
-                  <AlertTriangle size={12} className={a.critical ? 'text-red-400' : 'text-amber-400'} />
-                </div>
-                <p className="text-xs text-foreground font-medium leading-tight">{a.name}</p>
-                <p className="text-[10px] mt-1">
-                  <span className={a.critical ? 'text-red-400 font-bold' : 'text-amber-400 font-bold'}>{a.stock} uds</span>
-                  <span className="text-muted-foreground"> / min {a.min}</span>
+      {/* ── KPIs ── */}
+      <Bones
+        name="dashboard-kpis"
+        loading={kpisCargando}
+        placeholder={<BoneKpis count={kpis.length || 4} />}
+      >
+        <div className="grid grid-cols-2 gap-3 stagger-children lg:grid-cols-4">
+          {kpis.map((k) => (
+            <Link
+              key={k.label}
+              href={k.href}
+              className="surface group px-4 py-3 transition-colors hover:border-primary/30"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  {k.label}
                 </p>
+                <k.icon size={14} className="text-muted-foreground" />
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Products summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Productos activos', value: String(activeProducts), color: 'text-emerald-500' },
-            { label: 'Disponibles en POS', value: String(criticalProducts), color: 'text-amber-500' },
-            { label: 'Total catálogo', value: String(products.length), color: 'text-foreground' },
-            { label: 'Inactivos', value: String(products.length - activeProducts), color: 'text-muted-foreground' },
-          ].map((k) => (
-            <div key={k.label} className="rounded-xl border border-border bg-card px-3 py-2.5">
-              <p className="text-[9px] text-muted-foreground uppercase tracking-wider">{k.label}</p>
-              <p className={`text-lg font-bold font-mono mt-0.5 ${k.color}`}>{k.value}</p>
-            </div>
+              <p className="mt-1 font-mono text-lg font-bold text-foreground lg:text-xl">
+                {k.value ?? '—'}
+              </p>
+            </Link>
           ))}
         </div>
+      </Bones>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* ── Usuarios por rol ── */}
+        {verRoles && (
+          <section className="surface animate-fade-in-up p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Usuarios por rol</h2>
+              <Link
+                href="/roles"
+                className="flex items-center gap-1 text-xs font-medium text-primary-text hover:underline"
+              >
+                Ver roles <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            <Bones
+              name="dashboard-roles"
+              loading={roles === null}
+              placeholder={<BoneBars rows={5} />}
+            >
+              {roles !== null && roles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sin datos.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {[...(roles ?? [])]
+                  .sort((a, b) => b._count.usuarios - a._count.usuarios)
+                  .map((r) => {
+                    const pct = totalUsuarios
+                      ? Math.round((r._count.usuarios / totalUsuarios) * 100)
+                      : 0;
+                    return (
+                      <li key={r.id}>
+                        <div className="mb-1 flex items-center justify-between text-sm">
+                          <span className="text-foreground">
+                            {getRoleLabel(r.nombre)}
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {r._count.usuarios}
+                          </span>
+                        </div>
+                        <div
+                          className="h-1.5 overflow-hidden rounded-full bg-muted"
+                          role="presentation"
+                        >
+                          <div
+                            className="h-full rounded-full bg-primary transition-[width] duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Bones>
+          </section>
+        )}
+
+        {/* ── Sedes ── */}
+        {verSedes && (
+          <section className="surface animate-fade-in-up p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Sedes</h2>
+              <Link
+                href="/sucursales"
+                className="flex items-center gap-1 text-xs font-medium text-primary-text hover:underline"
+              >
+                Gestionar <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            <Bones
+              name="dashboard-sedes"
+              loading={sedes === null}
+              placeholder={<BoneList rows={4} />}
+            >
+              {sedes !== null && sedes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No hay sedes registradas.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {(sedes ?? []).slice(0, 6).map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-foreground">{s.nombre}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {s.direccion ?? 'Sin dirección'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {s._count.usuarios}
+                      </span>
+                      <span
+                        className={cn(
+                          'size-1.5 rounded-full',
+                          s.activo ? 'bg-success' : 'bg-muted-foreground',
+                        )}
+                        title={s.activo ? 'Activa' : 'Inactiva'}
+                      />
+                    </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Bones>
+          </section>
+        )}
       </div>
+
+      {/* ── Actividad reciente ── */}
+      {verAudit && (
+        <section className="surface animate-fade-in-up p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <ScrollText size={15} className="text-muted-foreground" /> Actividad reciente
+            </h2>
+            <Link
+              href="/auditoria"
+              className="flex items-center gap-1 text-xs font-medium text-primary-text hover:underline"
+            >
+              Ver todo <ArrowRight size={12} />
+            </Link>
+          </div>
+
+          <Bones
+            name="dashboard-actividad"
+            loading={logs === null}
+            placeholder={<BoneList rows={6} avatar />}
+          >
+            {logs !== null && logs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin actividad registrada.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {(logs ?? []).map((log) => (
+                <li key={log.id} className="flex items-start gap-3 py-2 text-sm">
+                  <span
+                    className={cn('mt-1.5 size-1.5 shrink-0 rounded-full bg-current', accionTone(log.accion))}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className={cn('font-medium', accionTone(log.accion))}>
+                      {log.accion}
+                    </span>
+                    {log.entidad && (
+                      <span className="ml-2 text-xs text-muted-foreground">{log.entidad}</span>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {log.usuario?.username ?? '—'}
+                  </span>
+                  <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground sm:block">
+                    {dateFmt.format(new Date(log.createdAt))}
+                  </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Bones>
+        </section>
+      )}
+
+      {/* ── Portada minima para roles operativos ── */}
+      {!verRoles && !verSedes && !verAudit && (
+        <section className="surface animate-fade-in-up p-6">
+          <h2 className="text-base font-semibold text-foreground">Tu cuenta</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tu rol no tiene módulos de administración asignados. Desde{' '}
+            <Link href="/perfil" className="text-primary-text hover:underline">
+              tu perfil
+            </Link>{' '}
+            puedes cambiar la contraseña y revisar tus sesiones activas.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

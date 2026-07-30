@@ -1,134 +1,203 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Bell, ChevronDown, Sun, Moon, User, LogOut, Check } from 'lucide-react';
-import { useUIStore } from '@/store/ui-store';
+import { useRef, useEffect, useState, useId } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ChevronDown, Sun, Moon, User, LogOut, MapPin } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { useThemeStore } from '@/store/theme-store';
+import { getRouteTitle } from '@/lib/navigation';
 import { SidebarToggle } from './sidebar';
 import { cn } from '@/lib/utils';
-import type { UserRole } from '@/lib/roles';
+import { getRoleLabel } from '@/lib/roles';
 
-const SEDES = ['Zona Rosa', 'Chapinero', 'El Poblado', 'Todas las sedes'];
-
-export function Header({ title }: { title: string }) {
-  const { selectedSede, setSelectedSede } = useUIStore();
-  const { user, logout } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
-  const router = useRouter();
-  const role = (user?.role ?? 'empleado') as UserRole;
-
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [sedeMenuOpen, setSedeMenuOpen] = useState(false);
-  const userRef = useRef<HTMLDivElement>(null);
-  const sedeRef = useRef<HTMLDivElement>(null);
+/**
+ * Menu desplegable accesible.
+ * Cierra al hacer click fuera y con Escape, y expone `aria-expanded`
+ * para lectores de pantalla (antes faltaba en ambos menus).
+ */
+function Menu({
+  label,
+  trigger,
+  children,
+  align = 'end',
+  disabled,
+  className,
+}: {
+  label: string;
+  trigger: (state: { open: boolean }) => React.ReactNode;
+  children: (close: () => void) => React.ReactNode;
+  align?: 'start' | 'end';
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const menuId = useId();
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserMenuOpen(false);
-      if (sedeRef.current && !sedeRef.current.contains(e.target as Node)) setSedeMenuOpen(false);
+    if (!open) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
 
-  const handleLogout = () => { logout(); setUserMenuOpen(false); router.push('/login'); };
-
-  // Sedes disponibles según rol
-  const availableSedes = role === 'superadmin' ? SEDES : [user?.sede || 'Zona Rosa'];
-  const canChangeSede = availableSedes.length > 1;
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   return (
-    <header className="sticky top-0 z-30 h-14 bg-background flex items-center justify-between px-4 lg:px-6">
-      <div className="flex items-center gap-3">
-        <SidebarToggle />
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      </div>
+    <div className={cn('relative', className)} ref={ref}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className="disabled:cursor-default disabled:opacity-80"
+      >
+        {trigger({ open })}
+      </button>
 
-      <div className="flex items-center gap-2">
-        {/* ── Sede selector ── */}
-        <div className="relative hidden md:block" ref={sedeRef}>
-          <button
-            onClick={() => canChangeSede && setSedeMenuOpen((v) => !v)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-foreground transition-colors',
-              canChangeSede ? 'hover:bg-muted cursor-pointer' : 'cursor-default opacity-80'
-            )}
-          >
-            {selectedSede}
-            {canChangeSede && <ChevronDown size={13} className={cn('text-muted-foreground transition-transform', sedeMenuOpen && 'rotate-180')} />}
-          </button>
-
-          {sedeMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 w-48 bg-popover border border-border rounded-xl shadow-xl overflow-hidden animate-scale-in z-50">
-              {availableSedes.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => { setSelectedSede(s); setSedeMenuOpen(false); }}
-                  className={cn(
-                    'w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-muted transition-colors',
-                    s === selectedSede ? 'text-amber-500 font-medium' : 'text-foreground'
-                  )}
-                >
-                  {s}
-                  {s === selectedSede && <Check size={14} className="text-amber-500" />}
-                </button>
-              ))}
-            </div>
+      {open && (
+        <div
+          id={menuId}
+          role="menu"
+          aria-label={label}
+          className={cn(
+            'absolute top-full mt-1.5 w-52 surface-overlay overflow-hidden animate-scale-in z-50',
+            align === 'end' ? 'right-0' : 'left-0',
           )}
+        >
+          {children(() => setOpen(false))}
         </div>
+      )}
+    </div>
+  );
+}
 
-        {/* Theme toggle — inmediato */}
+const menuItem =
+  'w-full flex items-center gap-3 px-4 min-h-control-lg py-2.5 text-sm transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none';
+
+export function Header() {
+  const pathname = usePathname();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const { theme, toggleTheme } = useThemeStore();
+  const router = useRouter();
+
+  const title = getRouteTitle(pathname);
+
+  /**
+   * Alcance de sede: es un INDICADOR, no un selector.
+   *
+   * El backend deriva el alcance del JWT (`sedeId`) y filtra en cada service;
+   * un SUPERADMIN tiene `sedeId = null` y ve todo. Cambiar de sede desde el
+   * cliente no tendria efecto sobre las respuestas de la API, asi que antes
+   * habia aqui un desplegable puramente decorativo.
+   */
+  const scopeLabel =
+    user?.rol === 'SUPERADMIN' ? 'Todas las sedes' : (user?.sede ?? 'Sin sede');
+
+  const handleLogout = async () => {
+    // Revoca la familia de refresh tokens en el backend antes de salir.
+    await logout();
+    router.replace('/login');
+  };
+
+  return (
+    <header className="sticky top-0 z-30 h-14 shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border flex items-center gap-2 px-3 sm:px-4 lg:px-6">
+      <SidebarToggle />
+
+      {/* `truncate` + `min-w-0` evitan que un titulo largo empuje las
+          acciones fuera de la pantalla en moviles estrechos. */}
+      <h1 className="flex-1 min-w-0 truncate text-base font-semibold text-foreground">
+        {title}
+      </h1>
+
+      <div className="flex items-center gap-1 sm:gap-2">
+        {/* Indicador del alcance de sede que impone el backend. */}
+        <span
+          title={`Alcance de datos: ${scopeLabel}`}
+          className="flex h-control items-center gap-1.5 rounded-lg border border-border px-2 text-sm text-muted-foreground sm:px-3"
+        >
+          <MapPin size={14} aria-hidden="true" />
+          <span className="hidden max-w-[10rem] truncate sm:inline">{scopeLabel}</span>
+        </span>
+
         <button
+          type="button"
           onClick={toggleTheme}
-          className="p-2 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
+          className="grid size-control place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
 
-        {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-muted transition-colors">
-          <Bell size={18} className="text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
-        </button>
+        {/* Aqui iba una campana de notificaciones con un punto rojo fijo:
+            no habia backend de notificaciones detras, asi que anunciaba
+            novedades inexistentes. Se retira hasta que exista el modulo. */}
 
-        {/* User dropdown */}
-        <div className="relative" ref={userRef}>
-          <button
-            onClick={() => setUserMenuOpen((v) => !v)}
-            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-muted transition-colors"
-          >
-            <div className="w-7 h-7 rounded-full bg-amber-600 flex items-center justify-center text-xs font-bold text-white">
-              {user?.initials || 'CM'}
-            </div>
-            <span className="hidden sm:block text-sm font-medium text-foreground">
-              {user?.name?.split(' ')[0] || 'Carlos'}
+        <Menu
+          label="Menú de usuario"
+          className="ml-0.5"
+          trigger={({ open }) => (
+            <span className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-1.5 sm:pr-2 transition-colors hover:bg-muted">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {user?.initials ?? '··'}
+              </span>
+              <span className="hidden sm:block max-w-[8rem] truncate text-sm font-medium text-foreground">
+                {user?.username ?? 'Usuario'}
+              </span>
+              <ChevronDown
+                size={13}
+                aria-hidden="true"
+                className={cn('text-muted-foreground transition-transform', open && 'rotate-180')}
+              />
             </span>
-            <ChevronDown size={13} className={cn('text-muted-foreground transition-transform', userMenuOpen && 'rotate-180')} />
-          </button>
-
-          {userMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-48 bg-popover border border-border rounded-xl shadow-xl overflow-hidden animate-scale-in z-50">
-              <div className="px-4 py-3 border-b border-border">
-                <p className="text-sm font-semibold text-foreground">{user?.name}</p>
-                <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+          )}
+        >
+          {(close) => (
+            <>
+              <div className="border-b border-border px-4 py-3">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {user?.username}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {user ? getRoleLabel(user.rol) : ''}
+                </p>
               </div>
               <button
-                onClick={() => { router.push('/perfil'); setUserMenuOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  router.push('/perfil');
+                }}
+                className={cn(menuItem, 'text-foreground')}
               >
-                <User size={15} className="text-muted-foreground" /> Ver perfil
+                <User size={15} className="text-muted-foreground" aria-hidden="true" /> Ver perfil
               </button>
               <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-500/5 transition-colors"
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  void handleLogout();
+                }}
+                className={cn(menuItem, 'text-destructive hover:bg-destructive/10')}
               >
-                <LogOut size={15} /> Cerrar sesión
+                <LogOut size={15} aria-hidden="true" /> Cerrar sesión
               </button>
-            </div>
+            </>
           )}
-        </div>
+        </Menu>
       </div>
     </header>
   );

@@ -65,10 +65,16 @@ export function Pagination({ page, totalPages, total, pageSize = 10, onPageChang
             <button
               key={p}
               onClick={() => onPageChange(p)}
+              /* La pagina actual se deshabilita: al pulsarla, el consumidor
+                 ponia loading=true pero la dependencia del efecto no cambiaba,
+                 dejando la tabla en "Cargando..." para siempre. */
+              disabled={p === page}
+              aria-current={p === page ? 'page' : undefined}
+              aria-label={`Página ${p}`}
               className={cn(
                 'w-8 h-8 flex items-center justify-center rounded-lg text-xs font-medium transition-all',
                 p === page
-                  ? 'bg-amber-500 text-black font-bold shadow-sm'
+                  ? 'bg-primary text-primary-foreground font-bold shadow-sm cursor-default'
                   : 'border border-border text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >

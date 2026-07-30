@@ -1,72 +1,172 @@
-export type UserRole = 'superadmin' | 'administrador' | 'empleado';
+/**
+ * Autorizacion en cliente.
+ *
+ * FUENTE DE VERDAD: el backend. Este modulo solo decide que se PINTA; quien
+ * decide que se PUEDE HACER es el `PermissionsGuard`/`RolesGuard` de NestJS.
+ * Ocultar un boton aqui no protege nada — es unicamente ergonomia de UI.
+ *
+ * Los permisos llegan en el payload del JWT (`permisos: string[]`, formato
+ * `modulo:accion`) y los siembra `prisma/seed.ts`.
+ */
 
-/** Rutas visibles por rol. '*' = todas */
-export const roleNavAccess: Record<UserRole, string[] | '*'> = {
-  superadmin: '*',
-  administrador: [
-    '/dashboard', '/ventas', '/caja', '/inventario', '/kardex',
-    '/compras', '/asistencia', '/productos', '/sucursales',
-  ],
-  empleado: [
-    '/dashboard', '/ventas', '/caja', '/inventario', '/kardex',
-    '/asistencia', '/productos',
-  ],
-};
+// ============================================================
+// ROLES (espejo de ROLES en src/common/constants/roles.constants.ts)
+// ============================================================
 
-export const canAccess = (role: UserRole, href: string): boolean => {
-  const access = roleNavAccess[role];
-  if (access === '*') return true;
-  return access.includes(href);
-};
+export const USER_ROLES = [
+  'SUPERADMIN',
+  'ADMIN',
+  'CAJERO',
+  'MOZO',
+  'COCINA',
+  'BARTENDER',
+] as const;
 
-/** Permisos CRUD por módulo */
-type Module = 'productos' | 'inventario' | 'usuarios' | 'sucursales' |
-              'compras' | 'caja' | 'asistencia' | 'kardex';
+export type UserRole = (typeof USER_ROLES)[number];
 
-export const permisos: Record<UserRole, Record<Module, { create: boolean; edit: boolean; delete: boolean }>> = {
-  superadmin: {
-    productos:   { create: true,  edit: true,  delete: true  },
-    inventario:  { create: true,  edit: true,  delete: true  },
-    usuarios:    { create: true,  edit: true,  delete: true  },
-    sucursales:  { create: true,  edit: true,  delete: true  },
-    compras:     { create: true,  edit: true,  delete: true  },
-    caja:        { create: true,  edit: true,  delete: true  },
-    asistencia:  { create: true,  edit: true,  delete: true  },
-    kardex:      { create: true,  edit: true,  delete: true  },
-  },
-  administrador: {
-    productos:   { create: true,  edit: true,  delete: true  },
-    inventario:  { create: true,  edit: true,  delete: false },
-    usuarios:    { create: false, edit: false, delete: false },
-    sucursales:  { create: false, edit: false, delete: false },
-    compras:     { create: true,  edit: true,  delete: false },
-    caja:        { create: true,  edit: true,  delete: false },
-    asistencia:  { create: true,  edit: true,  delete: false },
-    kardex:      { create: false, edit: false, delete: false },
-  },
-  empleado: {
-    productos:   { create: false, edit: false, delete: false },
-    inventario:  { create: false, edit: true,  delete: false }, // puede ajustar stock
-    usuarios:    { create: false, edit: false, delete: false },
-    sucursales:  { create: false, edit: false, delete: false },
-    compras:     { create: false, edit: false, delete: false },
-    caja:        { create: true,  edit: false, delete: false }, // puede registrar ventas
-    asistencia:  { create: false, edit: false, delete: false },
-    kardex:      { create: false, edit: false, delete: false },
-  },
-};
-
-export const can = (role: UserRole, module: Module, action: 'create' | 'edit' | 'delete'): boolean =>
-  permisos[role]?.[module]?.[action] ?? false;
+export function isUserRole(value: string): value is UserRole {
+  return (USER_ROLES as readonly string[]).includes(value);
+}
 
 export const roleLabel: Record<UserRole, string> = {
-  superadmin:    'Super Admin',
-  administrador: 'Administrador',
-  empleado:      'Empleado',
+  SUPERADMIN: 'Super Admin',
+  ADMIN: 'Administrador',
+  CAJERO: 'Cajero',
+  MOZO: 'Mozo',
+  COCINA: 'Cocina',
+  BARTENDER: 'Bartender',
 };
 
+/** Etiqueta legible para roles base y roles personalizados. */
+export const getRoleLabel = (role: string): string =>
+  isUserRole(role) ? roleLabel[role] : role;
+
 export const roleBadgeClass: Record<UserRole, string> = {
-  superadmin:    'bg-purple-500/10 border-purple-500/25 text-purple-500',
-  administrador: 'bg-amber-500/10  border-amber-500/25  text-amber-500',
-  empleado:      'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400',
+  SUPERADMIN: 'bg-special/10 border-special/25 text-special',
+  ADMIN: 'bg-primary/10 border-primary/25 text-primary-text',
+  CAJERO: 'bg-success/10 border-success/25 text-success',
+  MOZO: 'bg-success/10 border-success/25 text-success',
+  COCINA: 'bg-warning/10 border-warning/25 text-warning',
+  BARTENDER: 'bg-warning/10 border-warning/25 text-warning',
 };
+
+/** Color del avatar por rol, usado en tablas y cabeceras. */
+export const roleAvatarClass: Record<UserRole, string> = {
+  SUPERADMIN: 'bg-special',
+  ADMIN: 'bg-primary',
+  CAJERO: 'bg-success',
+  MOZO: 'bg-success',
+  COCINA: 'bg-warning',
+  BARTENDER: 'bg-warning',
+};
+
+// ============================================================
+// PERMISOS
+// ============================================================
+
+/** Permiso granular en formato `modulo:accion` (ej. `ventas:crear`). */
+export type Permission = string;
+
+/**
+ * SUPERADMIN recibe todos los permisos en el seed, asi que no necesita un
+ * bypass especial. Se mantiene el chequeo por si un despliegue tuviera el
+ * catalogo de permisos incompleto.
+ */
+export function hasPermission(
+  permisos: readonly Permission[],
+  required: Permission,
+): boolean {
+  return permisos.includes(required);
+}
+
+export function hasAnyPermission(
+  permisos: readonly Permission[],
+  required: readonly Permission[],
+): boolean {
+  return required.some((p) => permisos.includes(p));
+}
+
+// ============================================================
+// ACCESO A RUTAS
+// ============================================================
+
+/**
+ * Permiso exigido para entrar en cada ruta.
+ *
+ * `null` = ruta abierta a cualquier usuario autenticado.
+ *
+ * Cada entrada corresponde a un modulo real del backend; no hay
+ * aproximaciones. Si se anade una pantalla, primero debe existir su permiso
+ * en `prisma/seed.ts`.
+ */
+export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
+  '/dashboard': null,
+  '/perfil': null,
+  '/usuarios': 'usuarios:leer',
+  '/sucursales': 'establecimientos:leer',
+  '/roles': 'roles:leer',
+  '/permisos': 'permisos:leer',
+  '/auditoria': 'audit:leer',
+};
+
+/** ¿Puede el usuario ver esta ruta en la navegacion y entrar en ella? */
+export function canAccess(
+  permisos: readonly Permission[],
+  href: string,
+): boolean {
+  const required = ROUTE_PERMISSIONS[href];
+  if (required === null) return true;
+  // Ruta no declarada: por defecto se oculta, para no filtrar pantallas nuevas.
+  if (required === undefined) return false;
+  return hasPermission(permisos, required);
+}
+
+// ============================================================
+// ACCIONES CRUD
+// ============================================================
+
+export type CrudAction = 'create' | 'edit' | 'delete';
+
+/** Traduccion de la accion de UI al verbo que usa el backend. */
+const ACTION_VERB: Record<CrudAction, string> = {
+  create: 'crear',
+  edit: 'editar',
+  delete: 'eliminar',
+};
+
+/**
+ * Modulo de UI -> modulo de permisos del backend.
+ *
+ * `sucursales` es un caso especial: el catalogo de `prisma/seed.ts` solo
+ * define `establecimientos:leer|crear|editar`, NO `:eliminar`. El
+ * `EstablecimientosController` protege el DELETE con `establecimientos:editar`,
+ * asi que `can(p, 'sucursales', 'delete')` se remapea a ese permiso; de lo
+ * contrario devolveria `false` incluso para un SUPERADMIN.
+ */
+const MODULE_SCOPE = {
+  usuarios: 'usuarios',
+  roles: 'roles',
+  permisos: 'permisos',
+  sucursales: 'establecimientos',
+} as const;
+
+/** Permisos que el backend no define y hay que remapear al que si existe. */
+const PERMISSION_ALIASES: Record<string, Permission> = {
+  'establecimientos:eliminar': 'establecimientos:editar',
+};
+
+export type UiModule = keyof typeof MODULE_SCOPE;
+
+/**
+ * ¿Puede el usuario ejecutar esta accion?
+ *
+ * @example can(permisos, 'productos', 'create') -> busca `productos:crear`
+ */
+export function can(
+  permisos: readonly Permission[],
+  module: UiModule,
+  action: CrudAction,
+): boolean {
+  const required = `${MODULE_SCOPE[module]}:${ACTION_VERB[action]}`;
+  return hasPermission(permisos, PERMISSION_ALIASES[required] ?? required);
+}

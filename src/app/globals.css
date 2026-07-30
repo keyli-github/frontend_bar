@@ -34,11 +34,32 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Colores semanticos — desacoplados de la marca.
+     Cambiar --primary NO afecta a estos, y viceversa. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-special: var(--special);
+  --color-special-foreground: var(--special-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Densidad ERP — alturas de control y fila */
+  --spacing-control-xs: var(--control-h-xs);
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control: var(--control-h);
+  --spacing-control-lg: var(--control-h-lg);
+  --spacing-row: var(--row-h);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -64,9 +85,14 @@
   --popover-foreground:#111118;
   --sidebar-foreground:#111118;
 
-  /* Primario — ámbar */
+  /* Primario — ámbar.
+     primary            = rellenos y bordes de marca
+     primary-foreground = texto SOBRE un relleno ambar  (#d97706 vs #ffffff = 3.19:1 → falla AA,
+                          por eso el texto encima es oscuro: 5.7:1)
+     primary-text       = texto ambar SOBRE fondo claro (amber-700 = 5.0:1 → cumple AA) */
   --primary:           #d97706;
-  --primary-foreground:#ffffff;
+  --primary-foreground:#1a1206;
+  --primary-text:      #b45309;
 
   /* Secundario / muted — gris muy suave solo para inputs y zonas muted */
   --secondary:              #f4f4f6;
@@ -89,17 +115,43 @@
   --ring:     #d97706;
   --sidebar-ring: #d97706;
 
-  /* Destructive */
-  --destructive: #ef4444;
+  /* ── Semanticos (estado del dato, NO marca) ──
+     Todos verificados >= 4.5:1 contra su -foreground. */
+  --success:            #047857;
+  --success-foreground: #ffffff;
+  --warning:            #b45309;
+  --warning-foreground: #ffffff;
+  --info:               #2563eb;
+  --info-foreground:    #ffffff;
+  --destructive:            #dc2626;
+  --destructive-foreground: #ffffff;
+  --special:                #7c3aed; /* rol elevado / estado excepcional */
+  --special-foreground:     #ffffff;
 
-  /* Charts */
-  --chart-1: #f59e0b;
-  --chart-2: #3b82f6;
-  --chart-3: #22c55e;
-  --chart-4: #a855f7;
-  --chart-5: #f97316;
+  /* Charts — alineados a la escala semantica */
+  --chart-1: #d97706;
+  --chart-2: #2563eb;
+  --chart-3: #059669;
+  --chart-4: #7c3aed;
+  --chart-5: #ea580c;
 
   --radius: 0.625rem;
+
+  /* ── Densidad ERP ──
+     Interfaz de datos: controles compactos, filas legibles.
+     Los targets tactiles se amplian en <768px (ver @media abajo). */
+  --control-h-xs: 1.5rem;   /* 24px — chips, toggles inline */
+  --control-h-sm: 1.75rem;  /* 28px — filtros densos */
+  --control-h:    2rem;     /* 32px — input/boton por defecto */
+  --control-h-lg: 2.25rem;  /* 36px — CTA principal */
+  --row-h:        2.25rem;  /* 36px — fila de tabla */
+
+  /* ── Elevacion ──
+     En claro las tarjetas son blancas sobre blanco: la sombra es
+     la unica separacion. En oscuro se resuelve con borde. */
+  --elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --elevation-2: 0 2px 8px -2px rgb(0 0 0 / 0.10), 0 0 0 1px rgb(0 0 0 / 0.05);
+  --elevation-3: 0 8px 24px -6px rgb(0 0 0 / 0.14), 0 0 0 1px rgb(0 0 0 / 0.06);
 }
 
 /* ================================================================
@@ -114,13 +166,25 @@
   --popover-foreground: #f5f5fa;
   --primary:     #f59e0b;
   --primary-foreground: #111118;
+  --primary-text:       #fbbf24;
   --secondary:   #1e1e2a;
   --secondary-foreground: #f5f5fa;
   --muted:       #1e1e2a;
   --muted-foreground: #8b8b9e;
   --accent:      #f59e0b;
   --accent-foreground: #111118;
-  --destructive: #f87171;
+
+  --success:            #10b981;
+  --success-foreground: #04140e;
+  --warning:            #f59e0b;
+  --warning-foreground: #111118;
+  --info:               #60a5fa;
+  --info-foreground:    #0b1220;
+  --destructive:            #f87171;
+  --destructive-foreground: #180a0a;
+  --special:                #c084fc;
+  --special-foreground:     #170b26;
+
   --border:      rgba(255, 255, 255, 0.08);
   --input:       rgba(255, 255, 255, 0.10);
   --ring:        #f59e0b;
@@ -133,10 +197,15 @@
   --sidebar-border:    rgba(255, 255, 255, 0.08);
   --sidebar-ring:      #f59e0b;
   --chart-1: #f59e0b;
-  --chart-2: #3b82f6;
-  --chart-3: #22c55e;
-  --chart-4: #a855f7;
-  --chart-5: #f97316;
+  --chart-2: #60a5fa;
+  --chart-3: #10b981;
+  --chart-4: #c084fc;
+  --chart-5: #fb923c;
+
+  /* En oscuro la separacion la da el borde, no la sombra */
+  --elevation-1: 0 0 0 1px rgb(255 255 255 / 0.06);
+  --elevation-2: 0 2px 8px -2px rgb(0 0 0 / 0.50), 0 0 0 1px rgb(255 255 255 / 0.07);
+  --elevation-3: 0 12px 32px -8px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.09);
 }
 
 /* ================================================================
@@ -157,13 +226,39 @@
 }
 
 /* ================================================================
-   SOMBRAS SUTILES EN CARDS — solo modo claro
-   Las tarjetas son blancas sobre fondo blanco → se diferencian por sombra
+   SUPERFICIES
+   Reemplaza el antiguo hack `.rounded-xl.border` que enganchaba la
+   sombra a clases de utilidad (se rompia al cambiar el radio).
+   Ahora es explicito y funciona igual en claro y oscuro.
    ================================================================ */
-@layer base {
-  :root:not(.dark) .rounded-xl.border,
-  :root:not(.dark) .rounded-2xl.border {
-    box-shadow: 0 1px 3px 0 rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+@utility surface {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--elevation-1);
+}
+
+@utility surface-raised {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--elevation-2);
+}
+
+@utility surface-overlay {
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border);
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--elevation-3);
+}
+
+/* Realce al pasar el cursor, solo en dispositivos con puntero real */
+@media (hover: hover) {
+  .surface-interactive:hover {
+    box-shadow: var(--elevation-2);
   }
 }
 
@@ -217,15 +312,55 @@
 .stagger-children > *:nth-child(10) { animation-delay: 495ms; }
 
 /* ================================================================
-   RESPONSIVE MÓVIL — ajustes globales
+   ACCESIBILIDAD DE MOVIMIENTO
+   Respeta la preferencia del sistema: sin esto las animaciones
+   stagger provocan mareo a usuarios sensibles al movimiento.
    ================================================================ */
-@layer utilities {
-  /* Tablas: scroll horizontal en móvil */
-  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
-  /* Cards grid en móvil: 1 columna mínimo */
-  @media (max-width: 480px) {
-    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .stagger-children { gap: 0.5rem; }
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+  .stagger-children > * { opacity: 1; }
+}
+
+/* ================================================================
+   RESPONSIVE MÓVIL
+   ================================================================ */
+@layer base {
+  /* Targets tactiles: WCAG 2.5.8 pide 24px minimo.
+     En pantallas sin puntero fino ampliamos los controles densos. */
+  @media (pointer: coarse) {
+    :root {
+      --control-h-xs: 1.75rem;
+      --control-h-sm: 2rem;
+      --control-h:    2.5rem;
+      --control-h-lg: 2.75rem;
+      --row-h:        2.75rem;
+    }
+  }
+
+  /* Evita el zoom automatico de iOS al enfocar un input (<16px) */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+@utility table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Respeta el area segura de iOS en elementos fijos al borde inferior */
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
