@@ -122,6 +122,31 @@ const LOGGED_OUT = {
   bootstrapError: null as string | null,
 };
 
+// ── DEMO: credenciales locales cuando el backend no está disponible ──
+const ALL_PERMISOS: Permission[] = [
+  'usuarios:leer', 'usuarios:crear', 'usuarios:editar', 'usuarios:eliminar',
+  'usuarios:resetear-password', 'roles:leer', 'permisos:leer', 'audit:leer',
+  'establecimientos:leer', 'establecimientos:crear', 'establecimientos:editar',
+];
+
+const DEMO_USERS = [
+  {
+    username: 'keyli', email: 'keyli@barbeer.com', password: 'keyli123',
+    session: { id: '1', username: 'keyli', initials: 'KE', rol: 'SUPERADMIN', nivel: 100, sedeId: null, sede: null, createdAt: '2024-03-01' } as SessionUser,
+    permisos: ALL_PERMISOS,
+  },
+  {
+    username: 'charly', email: 'charly@barbeer.com', password: 'charly123',
+    session: { id: '2', username: 'charly', initials: 'CH', rol: 'ADMIN', nivel: 50, sedeId: 's1', sede: 'Zona Rosa', createdAt: '2024-06-15' } as SessionUser,
+    permisos: ['usuarios:leer', 'usuarios:crear', 'usuarios:editar', 'usuarios:eliminar', 'usuarios:resetear-password', 'roles:leer', 'permisos:leer', 'audit:leer', 'establecimientos:leer'] as Permission[],
+  },
+  {
+    username: 'frank', email: 'frank@barbeer.com', password: 'frank123',
+    session: { id: '5', username: 'frank', initials: 'FR', rol: 'CAJERO', nivel: 10, sedeId: 's1', sede: 'Zona Rosa', createdAt: '2025-01-10' } as SessionUser,
+    permisos: [] as Permission[],
+  },
+];
+
 // ============================================================
 // STORE
 // ============================================================
@@ -167,6 +192,23 @@ export const useAuthStore = create<AuthState>()(
             mustChangePassword: false,
           });
         } catch (error) {
+          // ── MODO DEMO: si el backend no está disponible, usar credenciales locales ──
+          const isNetworkError = error instanceof ApiError && error.status === 0;
+          if (isNetworkError) {
+            const demoUser = DEMO_USERS.find(
+              (u) => (u.username === username.toLowerCase() || u.email === username.toLowerCase()) && u.password === password,
+            );
+            if (demoUser) {
+              set({
+                user: demoUser.session,
+                permisos: demoUser.permisos,
+                status: 'authenticated',
+                isAuthenticated: true,
+                mustChangePassword: false,
+              });
+              return;
+            }
+          }
           clearTokens();
           set(LOGGED_OUT);
           throw error;
@@ -183,6 +225,9 @@ export const useAuthStore = create<AuthState>()(
       bootstrap: async () => {
         // Evita relanzarlo si ya hay una restauracion en curso o resuelta.
         if (get().status !== 'idle') return;
+
+        // Si ya está autenticado en modo demo, no intentar refresh.
+        if (get().isAuthenticated && get().user) return;
 
         if (!getRefreshToken()) {
           set(LOGGED_OUT);

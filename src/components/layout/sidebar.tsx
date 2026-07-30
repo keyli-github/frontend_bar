@@ -9,8 +9,76 @@ import { useUIStore } from '@/store/ui-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useIsDesktop } from '@/hooks/use-media-query';
 import { canAccess, getRoleLabel } from '@/lib/roles';
-import { NAV_MODULES, NAV_ROOT, getActiveModuleId } from '@/lib/navigation';
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { NAV_MODULES as API_NAV_MODULES, NAV_ROOT } from '@/lib/navigation';
+import {
+  BarChart3,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  Landmark,
+  Package,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ShieldCheck,
+  ShoppingCart,
+  Truck,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react';
+
+interface SidebarNavItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+}
+
+interface SidebarNavModule {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  items: SidebarNavItem[];
+}
+
+// Incluye tambien los modulos visuales que aun no cuentan con API propia.
+const NAV_MODULES: SidebarNavModule[] = [
+  {
+    id: 'ventas',
+    label: 'Ventas & Caja',
+    icon: BarChart3,
+    items: [
+      { name: 'Ventas / POS', href: '/ventas', icon: ShoppingCart },
+      { name: 'Caja', href: '/caja', icon: Landmark },
+    ],
+  },
+  {
+    id: 'inventario',
+    label: 'Inventario',
+    icon: Package,
+    items: [
+      { name: 'Productos', href: '/productos', icon: UtensilsCrossed },
+      { name: 'Inventario', href: '/inventario', icon: Package },
+      { name: 'Kardex', href: '/kardex', icon: FileText },
+      { name: 'Compras', href: '/compras', icon: Truck },
+    ],
+  },
+  {
+    id: 'personal',
+    label: 'Personal',
+    icon: ClipboardList,
+    items: [{ name: 'Asistencia', href: '/asistencia', icon: ClipboardList }],
+  },
+  ...API_NAV_MODULES.map((module) =>
+    module.id === 'admin'
+      ? {
+          ...module,
+          items: [
+            ...module.items,
+            { name: 'Seguridad', href: '/seguridad', icon: ShieldCheck },
+          ],
+        }
+      : module,
+  ),
+];
 
 /** Contenedor de acordeon animado por altura, sin JS de medicion. */
 function AccordionContent({
@@ -55,7 +123,12 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
 
   const panelRef = useRef<HTMLElement>(null);
-  const activeModuleId = getActiveModuleId(pathname);
+  const activeModuleId =
+    NAV_MODULES.find((module) =>
+      module.items.some(
+        (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+      ),
+    )?.id ?? '';
 
   /**
    * El modulo de la ruta actual esta abierto por defecto; el usuario puede
@@ -127,7 +200,7 @@ export function Sidebar() {
             width={36}
             height={36}
             className="shrink-0 object-contain"
-            priority
+            preload
           />
           {!collapsed && (
             <div className="min-w-0 flex-1 overflow-hidden">
@@ -186,7 +259,9 @@ export function Sidebar() {
             const visibleItems = mod.items.filter((i) => canAccess(permisos, i.href));
             if (visibleItems.length === 0) return null;
 
-            const isActive = visibleItems.some((i) => i.href === pathname);
+            const isActive = visibleItems.some(
+              (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+            );
             const isOpen = isModuleOpen(mod.id);
             const panelId = `nav-panel-${mod.id}`;
             const buttonId = `nav-trigger-${mod.id}`;
@@ -246,7 +321,8 @@ export function Sidebar() {
                 <AccordionContent open={isOpen} id={panelId} labelledBy={buttonId}>
                   <ul className="space-y-0.5 pb-1 pl-2">
                     {visibleItems.map((item) => {
-                      const active = pathname === item.href;
+                      const active =
+                        pathname === item.href || pathname.startsWith(`${item.href}/`);
                       return (
                         <li key={item.href}>
                           <Link

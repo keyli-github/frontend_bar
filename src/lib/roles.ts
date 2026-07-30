@@ -95,13 +95,22 @@ export function hasAnyPermission(
  *
  * `null` = ruta abierta a cualquier usuario autenticado.
  *
- * Cada entrada corresponde a un modulo real del backend; no hay
- * aproximaciones. Si se anade una pantalla, primero debe existir su permiso
- * en `prisma/seed.ts`.
+ * Las pantallas respaldadas por API usan exactamente el permiso sembrado por
+ * el backend. Las pantallas solo visuales usan `null`, pero siguen exigiendo
+ * una sesion valida porque viven dentro del layout protegido.
  */
 export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   '/dashboard': null,
   '/perfil': null,
+  // Modulos visuales aun sin API: disponibles para cualquier sesion valida.
+  '/ventas': null,
+  '/caja': null,
+  '/productos': null,
+  '/inventario': null,
+  '/kardex': null,
+  '/compras': null,
+  '/asistencia': null,
+  '/seguridad': null,
   '/usuarios': 'usuarios:leer',
   '/sucursales': 'establecimientos:leer',
   '/roles': 'roles:leer',

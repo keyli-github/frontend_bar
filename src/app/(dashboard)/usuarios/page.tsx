@@ -1,61 +1,69 @@
 'use client';
 
-/**
- * Gestion de usuarios — conectada a `UsuariosController` y `RolesController`.
- *
- *   GET    /api/usuarios?pagina&limite
- *   POST   /api/usuarios
- *   PATCH  /api/usuarios/:id
- *   DELETE /api/usuarios/:id                    (soft-delete: activo = false)
- *   POST   /api/usuarios/:id/resetear-password
- *   GET    /api/roles                            (selector de rol + conteos)
- *
- * Reglas que aplica el backend y que la UI refleja:
- *   - Un ADMIN solo ve y crea usuarios de su propia sede (la fuerza el servidor).
- *   - No se puede crear un SUPERADMIN desde la API.
- *   - Nadie puede asignar un rol de nivel >= al suyo.
- */
+/** Gestion de usuarios conectada a UsuariosController y sus catalogos reales. */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Eye,
+  KeyRound,
+  Plus,
+  Search,
+  ShieldCheck,
+} from 'lucide-react';
 import { Pagination } from '@/components/shared/pagination';
+import { ModalShell } from '@/components/shared/modal-shell';
+import { Bones, BoneKpis, BoneList, BoneTable } from '@/components/shared/bones';
+import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
 import { useAuthStore } from '@/store/auth-store';
-import { usuariosApi, rolesApi, establecimientosApi, ApiError } from '@/lib/api';
+import { establecimientosApi, ApiError, rolesApi, usuariosApi } from '@/lib/api';
 import {
   getRoleLabel,
   hasPermission,
+  isUserRole,
   roleAvatarClass,
   roleBadgeClass,
-  isUserRole,
 } from '@/lib/roles';
-import type { Establecimiento, Rol, Usuario } from '@/types/api';
-import { Search, Plus, X, KeyRound, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Bones, BoneKpis, BoneTable } from '@/components/shared/bones';
-import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
+import type { Establecimiento, Rol, Usuario, UsuarioDetalle } from '@/types/api';
 
 const PAGE_SIZE = 25;
-
 const inputClass =
-  'w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 transition-all text-sm';
-const labelClass = 'text-xs text-muted-foreground uppercase tracking-wider';
+  'mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/50 focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-60';
+const labelClass = 'text-xs font-medium uppercase tracking-wider text-muted-foreground';
 
-const initialsOf = (u: Usuario) =>
-  u.username.trim().slice(0, 2).toUpperCase() || '?';
+const initialsOf = (usuario: Usuario) =>
+  usuario.username.trim().slice(0, 2).toUpperCase() || '?';
 
-/** Estilo del badge por nombre de rol; los roles a medida caen en un gris neutro. */
-const badgeFor = (nombre: string) =>
-  isUserRole(nombre) ? roleBadgeClass[nombre] : 'bg-muted border-border text-muted-foreground';
+const badgeFor = (rol: string) =>
+  isUserRole(rol) ? roleBadgeClass[rol] : 'border-border bg-muted text-muted-foreground';
 
-const avatarFor = (nombre: string) =>
-  isUserRole(nombre) ? roleAvatarClass[nombre] : 'bg-muted-foreground';
+const avatarFor = (rol: string) =>
+  isUserRole(rol) ? roleAvatarClass[rol] : 'bg-muted-foreground';
 
-const labelFor = getRoleLabel;
+const formatDate = (iso: string) =>
+  new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(iso),
+  );
+
+type PendingAction = {
+  kind: 'deactivate' | 'reset-password';
+  usuario: Usuario;
+} | null;
+
+interface TemporaryCredential {
+  username: string;
+  password: string;
+}
 
 export default function UsuariosPage() {
-  const permisos = useAuthStore((s) => s.permisos);
-  const currentUser = useAuthStore((s) => s.user);
+  const permisos = useAuthStore((state) => state.permisos);
+  const currentUser = useAuthStore((state) => state.user);
   const boneyardBuild = useBoneyardBuild();
 
+  const canRead = boneyardBuild || hasPermission(permisos, 'usuarios:leer');
   const canCreate = boneyardBuild || hasPermission(permisos, 'usuarios:crear');
   const canEdit = boneyardBuild || hasPermission(permisos, 'usuarios:editar');
   const canDelete = boneyardBuild || hasPermission(permisos, 'usuarios:eliminar');
@@ -63,41 +71,47 @@ export default function UsuariosPage() {
     boneyardBuild || hasPermission(permisos, 'usuarios:resetear-password');
   const isSuperadmin = boneyardBuild || currentUser?.rol === 'SUPERADMIN';
 
-  // ── Datos ─────────────────────────────────────────────────
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [sedes, setSedes] = useState<Establecimiento[]>([]);
-  /** Avisos de catalogos que no cargaron: sin ellos no se puede crear usuarios. */
-  const [catalogoError, setCatalogoError] = useState<string | null>(null);
-  const [catalogosCargando, setCatalogosCargando] = useState(true);
+  const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
-  const [pagina, setPagina] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /** Se incrementa para forzar una recarga tras crear/editar/desactivar. */
+  const [catalogosCargando, setCatalogosCargando] = useState(true);
+  const [catalogoError, setCatalogoError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
-  // El backend no acepta parametro de busqueda todavia, asi que el filtro
-  // actua solo sobre la pagina cargada. Se avisa en la UI para no enganar.
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('TODOS');
+  const [sedeFilter, setSedeFilter] = useState('TODAS');
+  const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<Usuario | null>(null);
 
-  /**
-   * La carga se hace en callbacks de la promesa, no en el cuerpo del efecto:
-   * React 19 marca como error llamar a setState sincronamente dentro de un
-   * efecto (`react-hooks/set-state-in-effect`). El flag `cancelled` ademas
-   * descarta respuestas de paginas que ya no son la actual.
-   */
+  const [detailUser, setDetailUser] = useState<Usuario | null>(null);
+  const [detail, setDetail] = useState<UsuarioDetalle | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [temporaryCredential, setTemporaryCredential] =
+    useState<TemporaryCredential | null>(null);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
+    if (!canRead) return;
     let cancelled = false;
 
     usuariosApi
       .listUsuarios({ pagina, limite: PAGE_SIZE })
-      .then((res) => {
+      .then((result) => {
         if (cancelled) return;
-        setUsuarios(res.data);
-        setTotal(res.total);
-        setTotalPaginas(res.totalPaginas || 1);
+        setUsuarios(result.data);
+        setTotal(result.total);
+        setTotalPaginas(result.totalPaginas || 1);
         setError(null);
       })
       .catch((err: unknown) => {
@@ -113,28 +127,27 @@ export default function UsuariosPage() {
     return () => {
       cancelled = true;
     };
-  }, [pagina, reloadToken]);
+  }, [canRead, pagina, reloadToken]);
 
   useEffect(() => {
-    // Catalogos del formulario de alta. Si alguno falla se avisa: antes el
-    // error se tragaba y el <select required> quedaba vacio sin explicacion.
+    if (!canRead) return;
     let cancelled = false;
 
     Promise.allSettled([
       rolesApi.listRoles({ limite: 100 }),
       establecimientosApi.listEstablecimientos({ limite: 100 }),
-    ]).then(([resRoles, resSedes]) => {
+    ]).then(([roleResult, sedeResult]) => {
       if (cancelled) return;
+      const failures: string[] = [];
 
-      const fallos: string[] = [];
-      if (resRoles.status === 'fulfilled') setRoles(resRoles.value.data);
-      else fallos.push('roles');
-      if (resSedes.status === 'fulfilled') setSedes(resSedes.value.data);
-      else fallos.push('sedes');
+      if (roleResult.status === 'fulfilled') setRoles(roleResult.value.data);
+      else failures.push('roles');
+      if (sedeResult.status === 'fulfilled') setSedes(sedeResult.value.data);
+      else failures.push('sedes');
 
       setCatalogoError(
-        fallos.length
-          ? `No se pudieron cargar los catálogos de ${fallos.join(' y ')}. No podrás crear usuarios.`
+        failures.length
+          ? `No se pudieron cargar los catálogos de ${failures.join(' y ')}.`
           : null,
       );
       setCatalogosCargando(false);
@@ -143,11 +156,27 @@ export default function UsuariosPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canRead]);
+
+  const openDetail = async (usuario: Usuario) => {
+    setDetailUser(usuario);
+    setDetailLoading(true);
+    setDetail(null);
+    setDetailError(null);
+    try {
+      setDetail(await usuariosApi.getUsuario(usuario.id));
+    } catch (err) {
+        setDetailError(
+          err instanceof ApiError ? err.message : 'No se pudo cargar el detalle.',
+        );
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const recargar = useCallback(() => {
     setLoading(true);
-    setReloadToken((n) => n + 1);
+    setReloadToken((token) => token + 1);
   }, []);
 
   const irAPagina = useCallback((page: number) => {
@@ -155,90 +184,94 @@ export default function UsuariosPage() {
     setPagina(page);
   }, []);
 
-  const visibles = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return usuarios;
-    return usuarios.filter((u) => u.username.toLowerCase().includes(q));
-  }, [usuarios, search]);
-
-  /** Roles asignables: nunca SUPERADMIN, y nunca por encima del propio nivel. */
   const rolesAsignables = useMemo(
     () =>
       roles.filter(
-        (r) =>
-          r.activo &&
-          r.nombre !== 'SUPERADMIN' &&
-          (isSuperadmin || r.nivel < (currentUser?.nivel ?? 0)),
+        (rol) =>
+          rol.activo &&
+          rol.nombre !== 'SUPERADMIN' &&
+          (isSuperadmin || rol.nivel < (currentUser?.nivel ?? 0)),
       ),
-    [roles, isSuperadmin, currentUser],
+    [currentUser, isSuperadmin, roles],
   );
 
-  /**
-   * Sedes para el selector, desde `GET /establecimientos`.
-   *
-   * Antes se deducian de los usuarios ya cargados, con dos fallos: una sede
-   * recien creada no aparecia hasta tener a alguien dentro, y con la lista
-   * vacia el <select required> se quedaba sin opciones, impidiendo crear
-   * usuarios. Solo se activan las sedes activas.
-   */
-  const sedesActivas = useMemo(() => sedes.filter((s) => s.activo), [sedes]);
+  const sedesActivas = useMemo(() => sedes.filter((sede) => sede.activo), [sedes]);
 
-  // ── Modales ───────────────────────────────────────────────
-  const [showNew, setShowNew] = useState(false);
-  const [editing, setEditing] = useState<Usuario | null>(null);
+  const visibles = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return usuarios.filter((usuario) => {
+      const matchesSearch = !query || usuario.username.toLowerCase().includes(query);
+      const matchesRole = roleFilter === 'TODOS' || usuario.rol.id === roleFilter;
+      const matchesSede = sedeFilter === 'TODAS' || usuario.sede?.id === sedeFilter;
+      return matchesSearch && matchesRole && matchesSede;
+    });
+  }, [roleFilter, search, sedeFilter, usuarios]);
 
   const afterMutation = (message: string) => {
     toast.success(message);
     recargar();
   };
 
-  const handleDeactivate = async (u: Usuario) => {
-    if (!confirm(`¿Desactivar la cuenta ${u.username}?`)) return;
+  const handleReactivate = async (usuario: Usuario) => {
     try {
-      await usuariosApi.deactivateUsuario(u.id);
-      afterMutation('Usuario desactivado.');
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'No se pudo desactivar.');
-    }
-  };
-
-  /** Revierte el soft-delete de `DELETE /usuarios/:id`. */
-  const handleReactivate = async (u: Usuario) => {
-    try {
-      await usuariosApi.updateUsuario(u.id, { activo: true });
-      afterMutation(`Cuenta ${u.username} reactivada.`);
+      await usuariosApi.updateUsuario(usuario.id, { activo: true });
+      afterMutation(`Cuenta ${usuario.username} reactivada.`);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'No se pudo reactivar.');
     }
   };
 
-  const handleReset = async (u: Usuario) => {
-    if (!confirm(`¿Resetear la contraseña de ${u.username}?`)) return;
+  const handleConfirmedAction = async () => {
+    if (!pendingAction) return;
+    setActionLoading(true);
+    setActionError(null);
+
     try {
-      const res = await usuariosApi.resetPasswordUsuario(u.id);
-      // La contrasena temporal solo se muestra una vez: el toast no
-      // autodesaparece para que el administrador pueda copiarla.
-      toast.success(`Contraseña temporal de ${u.username}`, {
-        description: res.tempPassword,
-        duration: Infinity,
-        action: {
-          label: 'Copiar',
-          onClick: () => void navigator.clipboard?.writeText(res.tempPassword),
-        },
-      });
-      recargar();
+      if (pendingAction.kind === 'deactivate') {
+        await usuariosApi.deactivateUsuario(pendingAction.usuario.id);
+        afterMutation(`Cuenta ${pendingAction.usuario.username} desactivada.`);
+      } else {
+        const result = await usuariosApi.resetPasswordUsuario(pendingAction.usuario.id);
+        setTemporaryCredential({
+          username: pendingAction.usuario.username,
+          password: result.tempPassword,
+        });
+        recargar();
+      }
+      setPendingAction(null);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'No se pudo resetear.');
+      setActionError(
+        err instanceof ApiError ? err.message : 'No se pudo completar la operación.',
+      );
+    } finally {
+      setActionLoading(false);
     }
   };
 
+  const copyTemporaryPassword = async () => {
+    if (!temporaryCredential) return;
+    try {
+      await navigator.clipboard.writeText(temporaryCredential.password);
+      setCopied(true);
+    } catch {
+      toast.error('No se pudo copiar. Selecciona la contraseña manualmente.');
+    }
+  };
+
+  if (!canRead) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        No tienes permiso para ver usuarios.
+      </div>
+    );
+  }
+
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
-      {/* ── Cabecera ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up">
+    <div className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
+      <div className="flex flex-col gap-3 animate-fade-in-up sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Usuarios</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Usuarios</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {total} usuario{total === 1 ? '' : 's'} en tu ámbito
             {!isSuperadmin && currentUser?.sede ? ` · ${currentUser.sede}` : ''}
           </p>
@@ -247,208 +280,152 @@ export default function UsuariosPage() {
           <button
             type="button"
             onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm tracking-wide transition-all active:scale-[0.98] w-fit"
+            disabled={catalogosCargando || Boolean(catalogoError)}
+            className="flex w-fit items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold tracking-wide text-primary-foreground transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus size={16} />
-            NUEVO USUARIO
+            <Plus size={16} /> NUEVO USUARIO
           </button>
         )}
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm text-destructive"
-        >
+        <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           <AlertCircle size={15} /> {error}
         </p>
       )}
-
       {catalogoError && (
-        <p
-          role="alert"
-          className="flex items-center gap-2 rounded-lg border border-warning/25 bg-warning/10 px-4 py-2.5 text-sm text-warning"
-        >
-          <AlertCircle size={15} /> {catalogoError}
+        <p role="alert" className="flex items-center gap-2 rounded-lg border border-warning/25 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+          <AlertCircle size={15} /> {catalogoError} No podrás crear o editar usuarios.
         </p>
       )}
 
-      {/* ── KPIs por rol (conteo global desde /roles) ── */}
-      {(catalogosCargando || roles.length > 0) && (
-        <Bones
-          name="usuarios-kpis"
-          loading={catalogosCargando}
-          placeholder={<BoneKpis count={4} />}
-        >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
-            {roles.slice(0, 4).map((r) => (
-              <div key={r.id} className="surface px-3 py-2 lg:px-4 lg:py-3">
-                <p className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">
-                  {labelFor(r.nombre)}
-                </p>
-                <p className="text-base lg:text-lg font-bold font-mono mt-1 text-foreground">
-                  {r._count.usuarios}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Bones>
-      )}
+      <Bones name="usuarios-kpis" loading={catalogosCargando} placeholder={<BoneKpis count={4} />}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
+          {roles.slice(0, 4).map((rol) => (
+            <div key={rol.id} className="surface px-3 py-2 lg:px-4 lg:py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {getRoleLabel(rol.nombre)}
+              </p>
+              <p className="mt-1 font-mono text-base font-bold text-foreground lg:text-lg">
+                {rol._count.usuarios}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Bones>
 
-      {/* ── Busqueda ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in-up">
-        <div className="relative max-w-xs flex-1">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative max-w-sm flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filtrar por username…"
-            aria-label="Filtrar usuarios de esta página"
-            className="w-full h-10 pl-9 pr-4 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 text-sm transition-all"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Filtrar username de esta página..."
+            className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/50"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
-          El filtro se aplica a los {usuarios.length} usuarios de esta página.
-        </p>
-      </div>
-
-      {/* ── Tabla ── */}
-      <div className="surface overflow-hidden animate-fade-in-up">
-        <Bones
-          name="usuarios-tabla"
-          loading={loading}
-          placeholder={<BoneTable rows={8} cols={5} />}
+        <select
+          value={roleFilter}
+          onChange={(event) => setRoleFilter(event.target.value)}
+          aria-label="Filtrar por rol"
+          className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary/50"
         >
+          <option value="TODOS">Todos los roles</option>
+          {roles.map((rol) => <option key={rol.id} value={rol.id}>{getRoleLabel(rol.nombre)}</option>)}
+        </select>
+        <select
+          value={sedeFilter}
+          onChange={(event) => setSedeFilter(event.target.value)}
+          aria-label="Filtrar por sede"
+          className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary/50"
+        >
+          <option value="TODAS">Todas las sedes</option>
+          {sedes.map((sede) => <option key={sede.id} value={sede.id}>{sede.nombre}</option>)}
+        </select>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Los filtros se aplican a los {usuarios.length} usuarios de la página cargada.
+      </p>
+
+      <div className="surface overflow-hidden animate-fade-in-up">
+        <Bones name="usuarios-tabla" loading={loading} placeholder={<BoneTable rows={8} cols={7} />}>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  {['Cuenta', 'Rol', 'Sede', 'Estado', ''].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap"
-                    >
-                      {h}
+                  {['Cuenta', 'Rol', 'Sede', 'Estado', 'Seguridad', 'Alta', 'Acciones'].map((heading) => (
+                    <th key={heading} className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {heading}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-              {visibles.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                    No hay usuarios que mostrar.
-                  </td>
-                </tr>
-              ) : (
-                visibles.map((u) => (
-                  <tr key={u.id} className="hover:bg-muted/40 transition-colors">
+                {visibles.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                      No hay usuarios que mostrar.
+                    </td>
+                  </tr>
+                ) : visibles.map((usuario) => (
+                  <tr key={usuario.id} className="transition-colors hover:bg-muted/40">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0',
-                            avatarFor(u.rol.nombre),
-                          )}
-                        >
-                          {initialsOf(u)}
+                        <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white', avatarFor(usuario.rol.nombre))}>
+                          {initialsOf(usuario)}
                         </div>
-                        <span className="font-mono text-xs font-medium text-foreground">
-                          {u.username}
-                        </span>
+                        <span className="font-mono text-xs font-medium text-foreground">@{usuario.username}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          'px-2 py-0.5 rounded border text-[10px] font-bold uppercase',
-                          badgeFor(u.rol.nombre),
-                        )}
-                      >
-                        {u.rol.nombre}
+                      <span className={cn('rounded border px-2 py-0.5 text-[10px] font-bold uppercase', badgeFor(usuario.rol.nombre))}>
+                        {getRoleLabel(usuario.rol.nombre)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground text-sm">
-                      {u.sede?.nombre ?? '—'}
-                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{usuario.sede?.nombre ?? 'Todas'}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={cn(
-                            'w-1.5 h-1.5 rounded-full',
-                            u.activo ? 'bg-success' : 'bg-muted-foreground',
-                          )}
-                        />
-                        <span
-                          className={cn(
-                            'text-xs',
-                            u.activo ? 'text-success' : 'text-muted-foreground',
-                          )}
-                        >
-                          {u.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </div>
+                      <span className={cn('text-xs font-medium', usuario.activo ? 'text-success' : 'text-muted-foreground')}>
+                        {usuario.activo ? 'Activo' : 'Inactivo'}
+                      </span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      Usa “Ver detalle” para consultar el cambio obligatorio.
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(usuario.createdAt)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        <button type="button" onClick={() => void openDetail(usuario)} className="flex items-center gap-1 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted">
+                          <Eye size={13} /> Detalle
+                        </button>
                         {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(u)}
-                            className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary-text text-xs font-medium hover:bg-primary/20 transition-colors"
-                          >
+                          <button type="button" onClick={() => setEditing(usuario)} className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary-text hover:bg-primary/20">
                             Editar
                           </button>
                         )}
                         {canReset && (
-                          <button
-                            type="button"
-                            onClick={() => void handleReset(u)}
-                            title="Resetear contraseña"
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted/60 border border-border text-muted-foreground text-xs font-medium hover:bg-muted hover:text-foreground transition-colors"
-                          >
+                          <button type="button" onClick={() => setPendingAction({ kind: 'reset-password', usuario })} className="flex items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1.5 text-xs font-medium text-sky-500 hover:bg-sky-500/20">
                             <KeyRound size={12} /> Reset
                           </button>
                         )}
-                        {canDelete && u.activo && u.rol.nombre !== 'SUPERADMIN' && (
-                          <button
-                            type="button"
-                            onClick={() => void handleDeactivate(u)}
-                            className="px-3 py-1.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium hover:bg-destructive/20 transition-colors"
-                          >
+                        {canDelete && usuario.activo && usuario.rol.nombre !== 'SUPERADMIN' && (
+                          <button type="button" onClick={() => setPendingAction({ kind: 'deactivate', usuario })} className="rounded-lg border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20">
                             Desactivar
                           </button>
                         )}
-                        {canEdit && !u.activo && (
-                          <button
-                            type="button"
-                            onClick={() => void handleReactivate(u)}
-                            className="rounded-lg border border-success/20 bg-success/10 px-3 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20"
-                          >
+                        {canEdit && !usuario.activo && (
+                          <button type="button" onClick={() => void handleReactivate(usuario)} className="rounded-lg border border-success/20 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success hover:bg-success/20">
                             Reactivar
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
+                ))}
               </tbody>
             </table>
           </div>
         </Bones>
-
-        <Pagination
-          page={pagina}
-          totalPages={totalPaginas}
-          total={total}
-          pageSize={PAGE_SIZE}
-          onPageChange={irAPagina}
-          className="border-t border-border px-3"
-        />
+        <Pagination page={pagina} totalPages={totalPaginas} total={total} pageSize={PAGE_SIZE} onPageChange={irAPagina} className="border-t border-border px-3" />
       </div>
 
       {showNew && (
@@ -458,9 +435,9 @@ export default function UsuariosPage() {
           sedes={sedesActivas}
           showSede={isSuperadmin}
           onClose={() => setShowNew(false)}
-          onDone={(msg) => {
+          onDone={(message) => {
             setShowNew(false);
-            afterMutation(msg);
+            afterMutation(message);
           }}
         />
       )}
@@ -473,26 +450,131 @@ export default function UsuariosPage() {
           sedes={sedesActivas}
           showSede={isSuperadmin}
           onClose={() => setEditing(null)}
-          onDone={(msg) => {
+          onDone={(message) => {
             setEditing(null);
-            afterMutation(msg);
+            afterMutation(message);
           }}
         />
       )}
+
+      <ModalShell
+        open={Boolean(detailUser)}
+        title="Detalle del usuario"
+        subtitle={detailUser ? `@${detailUser.username}` : undefined}
+        onClose={() => setDetailUser(null)}
+      >
+        {detailError && <p role="alert" className="text-sm text-destructive">{detailError}</p>}
+        <Bones name="usuario-detalle" loading={detailLoading} placeholder={<BoneList rows={5} />}>
+          {detail && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4">
+                <div className={cn('flex size-12 items-center justify-center rounded-full text-sm font-bold text-white', avatarFor(detail.rol.nombre))}>
+                  {initialsOf(detail)}
+                </div>
+                <div>
+                  <p className="font-mono font-semibold text-foreground">@{detail.username}</p>
+                  <p className="text-sm text-muted-foreground">{getRoleLabel(detail.rol.nombre)}</p>
+                </div>
+                <span className={cn('ml-auto rounded border px-2 py-0.5 text-[10px] font-bold uppercase', badgeFor(detail.rol.nombre))}>
+                  {detail.activo ? 'Activo' : 'Inactivo'}
+                </span>
+              </div>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                {[
+                  ['Sede', detail.sede?.nombre ?? 'Todas las sedes'],
+                  ['Nivel', String(detail.rol.nivel)],
+                  ['Creado', formatDate(detail.createdAt)],
+                  ['Cambio obligatorio', detail.mustChangePassword ? 'Sí, pendiente' : 'No'],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-border bg-muted/25 p-3">
+                    <dt className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+                {canEdit && (
+                  <button type="button" onClick={() => { setDetailUser(null); setEditing(detail); }} className="h-10 rounded-lg border border-border bg-muted/60 px-4 text-sm font-medium text-foreground hover:bg-muted">
+                    Editar usuario
+                  </button>
+                )}
+                {canReset && (
+                  <button type="button" onClick={() => { setDetailUser(null); setPendingAction({ kind: 'reset-password', usuario: detail }); }} className="flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+                    <KeyRound size={15} /> Resetear contraseña
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </Bones>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(pendingAction)}
+        title={pendingAction?.kind === 'deactivate' ? 'Desactivar usuario' : 'Resetear contraseña'}
+        subtitle={pendingAction ? `@${pendingAction.usuario.username}` : undefined}
+        onClose={() => { if (!actionLoading) { setPendingAction(null); setActionError(null); } }}
+      >
+        <p className="text-sm leading-6 text-muted-foreground">
+          {pendingAction?.kind === 'deactivate'
+            ? 'El acceso quedará bloqueado hasta que un administrador reactive la cuenta.'
+            : 'La contraseña actual se invalidará y el backend generará una temporal de un solo uso.'}
+        </p>
+        {actionError && <p role="alert" className="mt-3 text-sm text-destructive">{actionError}</p>}
+        <div className="mt-5 flex justify-end gap-3">
+          <button type="button" disabled={actionLoading} onClick={() => { setPendingAction(null); setActionError(null); }} className="h-10 rounded-lg border border-border bg-muted/60 px-4 text-sm text-foreground hover:bg-muted disabled:opacity-50">
+            Cancelar
+          </button>
+          <button type="button" disabled={actionLoading} onClick={() => void handleConfirmedAction()} className={cn('h-10 rounded-lg px-4 text-sm font-bold disabled:opacity-50', pendingAction?.kind === 'deactivate' ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground')}>
+            {actionLoading ? 'PROCESANDO…' : pendingAction?.kind === 'deactivate' ? 'DESACTIVAR' : 'GENERAR CONTRASEÑA'}
+          </button>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(temporaryCredential)}
+        title="Contraseña temporal generada"
+        subtitle="Entrégala al usuario por un canal seguro."
+        onClose={() => { setTemporaryCredential(null); setCopied(false); }}
+      >
+        {temporaryCredential && (
+          <div className="space-y-4">
+            <p className="rounded-xl border border-warning/25 bg-warning/10 p-3 text-sm text-warning">
+              Se muestra una sola vez. No podrás recuperarla al cerrar este modal.
+            </p>
+            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Username</p>
+                <p className="mt-1 font-medium text-foreground">{temporaryCredential.username}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Contraseña temporal</p>
+                <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                  <code className="min-w-0 flex-1 break-all rounded-lg bg-muted px-3 py-2 font-mono text-sm font-bold text-foreground">{temporaryCredential.password}</code>
+                  <button type="button" onClick={() => void copyTemporaryPassword()} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 text-sm font-semibold text-primary-text hover:bg-primary/20">
+                    {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copiada' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-3">
+              <ShieldCheck size={18} className="mt-0.5 shrink-0 text-success" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                El usuario tendrá que definir una contraseña nueva en su siguiente inicio de sesión.
+              </p>
+            </div>
+          </div>
+        )}
+      </ModalShell>
     </div>
   );
 }
 
-// ============================================================
-// MODAL DE ALTA / EDICION
-// ============================================================
-
-interface FormModalProps {
+interface UsuarioFormModalProps {
   mode: 'create' | 'edit';
   usuario?: Usuario;
   roles: Rol[];
   sedes: { id: string; nombre: string }[];
-  /** Solo SUPERADMIN elige sede; para el resto la impone el backend. */
   showSede: boolean;
   onClose: () => void;
   onDone: (message: string) => void;
@@ -506,20 +588,21 @@ function UsuarioFormModal({
   showSede,
   onClose,
   onDone,
-}: FormModalProps) {
+}: UsuarioFormModalProps) {
+  const isCreate = mode === 'create';
   const [username, setUsername] = useState(usuario?.username ?? '');
   const [password, setPassword] = useState('');
   const [rolId, setRolId] = useState(usuario?.rol.id ?? '');
   const [sedeId, setSedeId] = useState(usuario?.sede?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentRoleMissing = Boolean(usuario && !roles.some((rol) => rol.id === usuario.rol.id));
 
-  const isCreate = mode === 'create';
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setSaving(true);
     setError(null);
+
     try {
       if (isCreate) {
         await usuariosApi.createUsuario({
@@ -531,151 +614,63 @@ function UsuarioFormModal({
         onDone('Usuario creado.');
       } else {
         await usuariosApi.updateUsuario(usuario!.id, {
-          ...(rolId && rolId !== usuario!.rol.id ? { rolId } : {}),
-          ...(showSede && sedeId && sedeId !== usuario!.sede?.id ? { sedeId } : {}),
+          ...(rolId !== usuario!.rol.id ? { rolId } : {}),
+          ...(showSede && sedeId !== usuario!.sede?.id ? { sedeId } : {}),
         });
         onDone('Usuario actualizado.');
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo guardar el usuario.');
       setSaving(false);
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={isCreate ? 'Nuevo usuario' : 'Editar usuario'}
+    <ModalShell
+      open
+      title={isCreate ? 'NUEVO USUARIO' : 'EDITAR USUARIO'}
+      subtitle={isCreate ? 'Crea el acceso inicial y asigna su ámbito.' : `Actualiza a @${usuario?.username}.`}
+      onClose={onClose}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <form
-        onSubmit={handleSubmit}
-        className="relative w-full max-w-md surface-overlay p-6 animate-scale-in"
-      >
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="font-bold text-foreground text-lg">
-            {isCreate ? 'NUEVO USUARIO' : 'EDITAR USUARIO'}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="Cerrar">
-            <X size={20} className="text-muted-foreground" />
-          </button>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="user-username" className={labelClass}>Username {isCreate ? '' : '(no editable)'}</label>
+          <input id="user-username" value={username} onChange={(event) => setUsername(event.target.value)} disabled={!isCreate} required maxLength={100} autoCapitalize="none" spellCheck={false} className={inputClass} />
         </div>
-
-        <div className="space-y-4">
+        <div className={cn('grid gap-3', showSede ? 'grid-cols-2' : 'grid-cols-1')}>
           <div>
-            <label htmlFor="f-username" className={labelClass}>
-              Username {isCreate ? '' : '(no editable)'}
-            </label>
-            <input
-              id="f-username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="cajero01"
-              autoCapitalize="none"
-              spellCheck={false}
-              maxLength={100}
-              disabled={!isCreate}
-              required
-              className={cn(inputClass, !isCreate && 'cursor-not-allowed opacity-60')}
-            />
+            <label htmlFor="user-role" className={labelClass}>Rol</label>
+            <select id="user-role" value={rolId} onChange={(event) => setRolId(event.target.value)} required className={inputClass}>
+              <option value="" disabled>Selecciona…</option>
+              {currentRoleMissing && usuario && <option value={usuario.rol.id}>{getRoleLabel(usuario.rol.nombre)}</option>}
+              {roles.map((rol) => <option key={rol.id} value={rol.id}>{getRoleLabel(rol.nombre)}</option>)}
+            </select>
           </div>
-
-          <div className={cn('grid gap-3', showSede ? 'grid-cols-2' : 'grid-cols-1')}>
+          {showSede && (
             <div>
-              <label htmlFor="f-rol" className={labelClass}>
-                Rol
-              </label>
-              <select
-                id="f-rol"
-                value={rolId}
-                onChange={(e) => setRolId(e.target.value)}
-                required
-                className={inputClass}
-              >
-                <option value="" disabled>
-                  Selecciona…
-                </option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {labelFor(r.nombre)}
-                  </option>
-                ))}
+              <label htmlFor="user-sede" className={labelClass}>Sede</label>
+              <select id="user-sede" value={sedeId} onChange={(event) => setSedeId(event.target.value)} required={isCreate} className={inputClass}>
+                <option value="" disabled>Selecciona…</option>
+                {sedes.map((sede) => <option key={sede.id} value={sede.id}>{sede.nombre}</option>)}
               </select>
             </div>
-
-            {showSede && (
-              <div>
-                <label htmlFor="f-sede" className={labelClass}>
-                  Sede
-                </label>
-                <select
-                  id="f-sede"
-                  value={sedeId}
-                  onChange={(e) => setSedeId(e.target.value)}
-                  required={isCreate}
-                  className={inputClass}
-                >
-                  <option value="" disabled>
-                    Selecciona…
-                  </option>
-                  {sedes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          {isCreate && (
-            <div>
-              <label htmlFor="f-password" className={labelClass}>
-                Contraseña temporal
-              </label>
-              <input
-                id="f-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mín. 12 caracteres, Aa1"
-                minLength={12}
-                maxLength={72}
-                required
-                className={inputClass}
-              />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                El usuario deberá cambiarla en su primer acceso.
-              </p>
-            </div>
           )}
-
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 h-10 rounded-lg bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 h-10 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm tracking-wide transition-all disabled:opacity-50"
-            >
-              {saving ? 'GUARDANDO…' : isCreate ? 'CREAR USUARIO' : 'GUARDAR'}
-            </button>
+        </div>
+        {isCreate && (
+          <div>
+            <label htmlFor="user-password" className={labelClass}>Contraseña temporal</label>
+            <input id="user-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={72} autoComplete="new-password" required className={inputClass} />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Mínimo 12 caracteres, mayúscula, minúscula y número. El cambio será obligatorio.</p>
           </div>
+        )}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose} disabled={saving} className="h-10 rounded-lg border border-border bg-muted/60 px-4 text-sm text-foreground hover:bg-muted disabled:opacity-50">Cancelar</button>
+          <button type="submit" disabled={saving} className="h-10 rounded-lg bg-primary px-5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            {saving ? 'GUARDANDO…' : isCreate ? 'CREAR USUARIO' : 'GUARDAR'}
+          </button>
         </div>
       </form>
-    </div>
+    </ModalShell>
   );
 }

@@ -33,7 +33,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
     if (status !== 'authenticated') return;
-
     // El backend bloquea toda la API hasta que se renueve la contrasena.
     if (mustChangePassword) {
       router.replace('/cambiar-password');

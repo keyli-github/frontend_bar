@@ -55,7 +55,7 @@ export default function LoginPage() {
           fill
           sizes="50vw"
           className="object-cover"
-          priority
+          fetchPriority="high"
         />
         {/* Overlay gradiente */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-black/10" />
@@ -63,14 +63,14 @@ export default function LoginPage() {
         {/* Contenido izquierdo */}
         <div className="relative z-10 flex flex-col h-full p-12 justify-between">
           {/* Logo */}
-          <div className="animate-fade-in-up">
+          <div>
             <Image
               src="/assets/barbeer.webp"
               alt="Bar Beer"
               width={200}
               height={200}
               className="object-contain drop-shadow-2xl"
-              priority
+              preload
             />
           </div>
 
@@ -99,7 +99,14 @@ export default function LoginPage() {
 
         {/* Fondo mobile */}
         <div className="lg:hidden absolute inset-0">
-          <Image src="/assets/img_login.webp" alt="" fill sizes="100vw" className="object-cover opacity-20" />
+          <Image
+            src="/assets/img_login.webp"
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover opacity-20"
+            fetchPriority="high"
+          />
           <div className="absolute inset-0 bg-black/60" />
         </div>
 
@@ -108,11 +115,17 @@ export default function LoginPage() {
         <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none" />
 
         {/* Card del formulario */}
-        <div className="relative z-10 w-full max-w-[420px] animate-scale-in">
+        <div className="relative z-10 w-full max-w-[420px]">
 
           {/* Logo móvil */}
           <div className="lg:hidden flex justify-center mb-8">
-            <Image src="/assets/barbeer.webp" alt="Bar Beer" width={110} height={110} className="object-contain" />
+            <Image
+              src="/assets/barbeer.webp"
+              alt="Bar Beer"
+              width={200}
+              height={200}
+              className="h-[110px] w-[110px] object-contain"
+            />
           </div>
 
           {/* Título */}

@@ -87,14 +87,14 @@ function Menu({
 const menuItem =
   'w-full flex items-center gap-3 px-4 min-h-control-lg py-2.5 text-sm transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none';
 
-export function Header() {
+export function Header({ title: titleOverride }: { title?: string } = {}) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, toggleTheme } = useThemeStore();
   const router = useRouter();
 
-  const title = getRouteTitle(pathname);
+  const title = titleOverride ?? getRouteTitle(pathname);
 
   /**
    * Alcance de sede: es un INDICADOR, no un selector.
