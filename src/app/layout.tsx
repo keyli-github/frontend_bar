@@ -1,9 +1,15 @@
 import type { Metadata } from 'next';
-import '@fontsource-variable/inter';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { BoneyardProvider } from '@/components/layout/boneyard-provider';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'Bar beer — ERP System',
@@ -12,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="h-full antialiased dark" suppressHydrationWarning>
+    <html lang="es" className={`${inter.variable} h-full antialiased dark`} suppressHydrationWarning>
       <head>
         {/* Previene flash de tema incorrecto */}
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var s=JSON.parse(localStorage.getItem('barbeer-theme')||'{}');var t=s.state&&s.state.theme;if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(e){}})();` }} />
