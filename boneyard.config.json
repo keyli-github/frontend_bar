@@ -9,6 +9,7 @@
     "/roles",
     "/permisos",
     "/auditoria",
+    "/asistencia",
     "/perfil"
   ],
   "color": "rgba(15, 23, 42, 0.08)",

@@ -3,14 +3,15 @@
 import { registerBones } from 'boneyard-js'
 import { configureBoneyard } from 'boneyard-js/react'
 
+import _asistencia_grid from './asistencia-grid.bones.json'
 import _auditoria_tabla from './auditoria-tabla.bones.json'
 import _dashboard_kpis from './dashboard-kpis.bones.json'
 import _dashboard_roles from './dashboard-roles.bones.json'
 import _dashboard_sedes from './dashboard-sedes.bones.json'
 import _dashboard_actividad from './dashboard-actividad.bones.json'
-import _perfil_sesiones from './perfil-sesiones.bones.json'
-import _permisos_catalogo from './permisos-catalogo.bones.json'
-import _roles_grid from './roles-grid.bones.json'
+import _inventario_kpis from './inventario-kpis.bones.json'
+import _permisos_tabla from './permisos-tabla.bones.json'
+import _roles_listado from './roles-listado.bones.json'
 import _sucursales_grid from './sucursales-grid.bones.json'
 import _usuarios_kpis from './usuarios-kpis.bones.json'
 import _usuarios_tabla from './usuarios-tabla.bones.json'
@@ -18,14 +19,15 @@ import _usuarios_tabla from './usuarios-tabla.bones.json'
 configureBoneyard({"color":"rgba(15, 23, 42, 0.08)","darkColor":"rgba(255, 255, 255, 0.07)","animate":"shimmer","shimmerColor":"rgba(255, 255, 255, 0.24)","darkShimmerColor":"rgba(255, 255, 255, 0.13)","speed":"1.8s","stagger":28,"transition":240})
 
 registerBones({
+  "asistencia-grid": _asistencia_grid,
   "auditoria-tabla": _auditoria_tabla,
   "dashboard-kpis": _dashboard_kpis,
   "dashboard-roles": _dashboard_roles,
   "dashboard-sedes": _dashboard_sedes,
   "dashboard-actividad": _dashboard_actividad,
-  "perfil-sesiones": _perfil_sesiones,
-  "permisos-catalogo": _permisos_catalogo,
-  "roles-grid": _roles_grid,
+  "inventario-kpis": _inventario_kpis,
+  "permisos-tabla": _permisos_tabla,
+  "roles-listado": _roles_listado,
   "sucursales-grid": _sucursales_grid,
   "usuarios-kpis": _usuarios_kpis,
   "usuarios-tabla": _usuarios_tabla,

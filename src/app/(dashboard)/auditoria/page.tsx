@@ -64,6 +64,18 @@ function formatAction(action: string) {
   return action.replaceAll('_', ' ');
 }
 
+/**
+ * En desarrollo el backend registra la IP de loopback (`::1` en IPv6,
+ * `127.0.0.1` en IPv4), porque cliente y servidor viven en la misma maquina.
+ * Node ademas antepone `::ffff:` a las IPv4 mapeadas. Se traduce a algo legible.
+ */
+function formatIp(ip: string | null | undefined, fallback: string) {
+  if (!ip) return fallback;
+  const clean = ip.replace(/^::ffff:/i, '');
+  if (clean === '::1' || clean === '127.0.0.1') return 'Local (este equipo)';
+  return clean;
+}
+
 function toApiDate(date: Date, endOfDay = false) {
   const value = new Date(date);
   value.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
@@ -361,7 +373,7 @@ export default function AuditoriaPage() {
                         </p>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <p className="font-mono text-xs text-foreground">{log.ip ?? 'Sin IP'}</p>
+                        <p className="font-mono text-xs text-foreground">{formatIp(log.ip, 'Sin IP')}</p>
                         <p className="mt-0.5 max-w-40 truncate text-[10px] text-muted-foreground">
                           {log.userAgent ?? 'User-agent no disponible'}
                         </p>
@@ -426,9 +438,16 @@ function AuditEventDetail({ event }: { event: AuditLog }) {
   const detailFields = [
     { label: 'Usuario', value: event.usuario?.username ?? 'Sistema', icon: <User size={14} /> },
     { label: 'Sede', value: event.sedeId ?? 'Ámbito global', icon: <MapPin size={14} /> },
-    { label: 'Dirección IP', value: event.ip ?? 'No disponible', icon: <Globe size={14} /> },
+    { label: 'Dirección IP', value: formatIp(event.ip, 'No disponible'), icon: <Globe size={14} /> },
     { label: 'User-agent', value: event.userAgent ?? 'No disponible', icon: <Monitor size={14} /> },
   ];
+
+  // Acciones como LOGIN_EXITOSO no registran `detalle`; otras guardan un objeto
+  // (p. ej. `{ cambios: [...] }`). Solo se muestra el bloque JSON si hay algo.
+  const detalle = event.detalle as unknown;
+  const hasDetalle =
+    detalle != null &&
+    !(typeof detalle === 'object' && Object.keys(detalle).length === 0);
 
   return (
     <div className="space-y-5">
@@ -479,19 +498,25 @@ function AuditEventDetail({ event }: { event: AuditLog }) {
         </div>
       </div>
 
-      <div>
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            JSON detalle
-          </p>
-          <span className="rounded bg-muted px-2 py-0.5 font-mono text-[9px] text-muted-foreground">
-            application/json
-          </span>
+      {hasDetalle ? (
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              JSON detalle
+            </p>
+            <span className="rounded bg-muted px-2 py-0.5 font-mono text-[9px] text-muted-foreground">
+              application/json
+            </span>
+          </div>
+          <pre className="max-h-56 overflow-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-xs leading-5 text-emerald-300 shadow-inner">
+            {JSON.stringify(event.detalle, null, 2)}
+          </pre>
         </div>
-        <pre className="max-h-56 overflow-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-xs leading-5 text-emerald-300 shadow-inner">
-          {JSON.stringify(event.detalle, null, 2)}
-        </pre>
-      </div>
+      ) : (
+        <p className="rounded-xl border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
+          Este evento no registró detalle adicional.
+        </p>
+      )}
     </div>
   );
 }

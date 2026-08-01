@@ -262,3 +262,360 @@ export interface AuditQuery {
   pagina?: number;
   limite?: number;
 }
+
+// ============================================================
+// ASISTENCIA
+// ============================================================
+
+/** Estados de una jornada. AUSENTE es implicito cuando no hay registro. */
+export type AsistenciaEstado = 'PRESENTE' | 'TARDANZA' | 'AUSENTE' | 'DIA_LIBRE';
+
+/**
+ * Fila de la planilla (`GET /asistencia`): un empleado + su jornada del dia.
+ * `asistenciaId` es null cuando el empleado no tiene registro (AUSENTE).
+ * Las horas viajan como ISO date-time string; `fecha` como ISO date.
+ */
+export interface AsistenciaPlanilla {
+  usuarioId: string;
+  username: string;
+  rol: string;
+  sede: SedeRef | null;
+  fecha: string;
+  asistenciaId: string | null;
+  estado: AsistenciaEstado;
+  turno: string | null;
+  horaEntrada: string | null;
+  horaSalida: string | null;
+  horasTrabajadas: number | null;
+  notas: string | null;
+}
+
+/** Jornada devuelta por `POST`/`PATCH /asistencia` (fila cruda). */
+export interface Asistencia {
+  id: string;
+  usuarioId: string;
+  sedeId: string | null;
+  fecha: string;
+  estado: AsistenciaEstado;
+  turno: string | null;
+  horaEntrada: string | null;
+  horaSalida: string | null;
+  horasTrabajadas: number | null;
+  notas: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `GET /asistencia/resumen` — KPIs del dia, consistentes con la planilla. */
+export interface AsistenciaResumen {
+  fecha: string;
+  totalEmpleados: number;
+  presente: number;
+  tardanza: number;
+  diaLibre: number;
+  ausente: number;
+}
+
+/** `AsistenciaQueryDto` — `fecha` ISO date (por defecto hoy). */
+export interface AsistenciaQuery extends PaginationQuery {
+  fecha?: string;
+  usuarioId?: string;
+}
+
+/** `CreateAsistenciaDto`. La sede se toma del empleado en el servidor. */
+export interface CreateAsistenciaPayload {
+  usuarioId: string;
+  fecha?: string;
+  estado?: AsistenciaEstado;
+  turno?: string;
+  horaEntrada?: string;
+  horaSalida?: string;
+  notas?: string;
+}
+
+/** `UpdateAsistenciaDto` — todos opcionales; usuario/fecha no se editan. */
+export interface UpdateAsistenciaPayload {
+  estado?: AsistenciaEstado;
+  turno?: string;
+  horaEntrada?: string;
+  horaSalida?: string;
+  notas?: string;
+}
+
+// ============================================================
+// PRODUCTOS (catalogo global)
+// ============================================================
+
+/** Categorias del catalogo (backend `PRODUCTO_CATEGORIAS`). */
+export type ProductoCategoria =
+  | 'Cocteles'
+  | 'Cervezas'
+  | 'Destilados'
+  | 'Vinos'
+  | 'Snacks'
+  | 'Otro';
+
+/**
+ * Item de `GET /productos` (ProductosService.toDto). `margin` es el margen
+ * porcentual calculado en el servidor. Precios en decimales.
+ */
+export interface Producto {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  categoria: string;
+  unidad: string;
+  precioVenta: number;
+  precioCosto: number;
+  disponiblePos: boolean;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** Margen % = round((precioVenta-precioCosto)/precioVenta*100), 0 si venta=0. */
+  margin: number;
+}
+
+/** `ProductoQueryDto`. `activo` viaja como 'true' | 'false'. */
+export interface ProductoQuery extends PaginationQuery {
+  q?: string;
+  categoria?: ProductoCategoria;
+  activo?: 'true' | 'false';
+}
+
+/** `CreateProductoDto`. `codigo` es unico e inmutable tras el alta. */
+export interface CreateProductoPayload {
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  categoria: ProductoCategoria;
+  unidad?: string;
+  precioVenta: number;
+  precioCosto: number;
+  disponiblePos?: boolean;
+  activo?: boolean;
+}
+
+/** `UpdateProductoDto` — todos opcionales; `codigo` no se edita. */
+export interface UpdateProductoPayload {
+  nombre?: string;
+  descripcion?: string;
+  categoria?: ProductoCategoria;
+  unidad?: string;
+  precioVenta?: number;
+  precioCosto?: number;
+  disponiblePos?: boolean;
+  activo?: boolean;
+}
+
+// ============================================================
+// INVENTARIO (stock por sede)
+// ============================================================
+
+/** Estado calculado del stock frente al minimo. */
+export type InventarioEstado = 'OK' | 'ALERTA' | 'CRITICO';
+
+/** Tipos de movimiento de stock (kardex). */
+export type MovimientoTipo = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'TRASLADO';
+
+/** Fila de `GET /inventario` (InventarioService.toDto). */
+export interface InventarioItem {
+  id: string;
+  productoId: string;
+  sedeId: string;
+  codigo: string;
+  producto: string;
+  categoria: string;
+  unidad: string;
+  stock: number;
+  min: number;
+  max: number;
+  costo: number;
+  ubicacion: string;
+  estado: InventarioEstado;
+  updatedAt: string;
+}
+
+/** `InventarioQueryDto`. `estado` se filtra en memoria sobre la pagina. */
+export interface InventarioQuery extends PaginationQuery {
+  q?: string;
+  categoria?: ProductoCategoria;
+  estado?: InventarioEstado;
+  sedeId?: string;
+}
+
+/** `GET /inventario/resumen` — KPIs de la sede. */
+export interface InventarioResumen {
+  totalItems: number;
+  ok: number;
+  alerta: number;
+  critico: number;
+  valorTotal: number;
+}
+
+/** `UpsertInventarioDto` — configura parametros de stock (min/max/ubicacion). */
+export interface UpsertInventarioPayload {
+  productoId: string;
+  sedeId?: string;
+  stockMin?: number;
+  stockMax?: number;
+  ubicacion?: string;
+}
+
+/** `AjusteStockDto`. AJUSTE fija el stock al valor de conteo fisico. */
+export interface AjusteStockPayload {
+  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+  cantidad: number;
+  referencia?: string;
+}
+
+// ============================================================
+// KARDEX (historico de movimientos, solo lectura)
+// ============================================================
+
+/** Fila de `GET /kardex` (KardexService.toDto). Solo lectura. */
+export interface KardexMovimiento {
+  id: string;
+  fecha: string;
+  hora: string;
+  producto: string;
+  codigo: string;
+  tipo: MovimientoTipo;
+  cantidad: number;
+  unidad: string;
+  stockAnterior: number;
+  stockNuevo: number;
+  valor: number;
+  referencia: string;
+  usuario: string;
+}
+
+/** `KardexQueryDto`. `desde`/`hasta` en YYYY-MM-DD (rango inclusivo). */
+export interface KardexQuery extends PaginationQuery {
+  q?: string;
+  tipo?: MovimientoTipo;
+  productoId?: string;
+  desde?: string;
+  hasta?: string;
+  sedeId?: string;
+}
+
+// ============================================================
+// COMPRAS (ordenes de compra + proveedores)
+// ============================================================
+
+/** Estados de una orden de compra (RECIBIDA y CANCELADA son terminales). */
+export type CompraEstado = 'PENDIENTE' | 'ENVIADA' | 'RECIBIDA' | 'CANCELADA';
+
+/** Linea de una orden de compra (solo en el detalle). */
+export interface CompraItem {
+  id: string;
+  productoId: string;
+  codigo: string;
+  producto: string;
+  cantidad: number;
+  costoUnit: number;
+  subtotal: number;
+}
+
+/**
+ * Orden de compra de `GET /compras` (ComprasService.toDto). `items` solo
+ * viene en el detalle (`GET /compras/:id`) y en las mutaciones.
+ */
+export interface Compra {
+  id: string;
+  orden: string;
+  fecha: string;
+  proveedor: string;
+  proveedorId: string;
+  articulos: number;
+  total: number;
+  estado: CompraEstado;
+  eta?: string;
+  solicitadoPor: string;
+  notas: string;
+  recibidaAt: string | null;
+  items?: CompraItem[];
+}
+
+/** `CompraQueryDto`. */
+export interface CompraQuery extends PaginationQuery {
+  q?: string;
+  estado?: CompraEstado;
+  proveedorId?: string;
+  sedeId?: string;
+}
+
+/** Linea al crear una orden (`CompraItemDto`). */
+export interface CreateCompraItem {
+  productoId: string;
+  cantidad: number;
+  costoUnit: number;
+}
+
+/** `CreateCompraDto` — al menos un item; el total lo calcula el servidor. */
+export interface CreateCompraPayload {
+  proveedorId: string;
+  sedeId?: string;
+  eta?: string;
+  notas?: string;
+  items: CreateCompraItem[];
+}
+
+/** `CambiarEstadoCompraDto`. */
+export interface CambiarEstadoCompraPayload {
+  estado: CompraEstado;
+}
+
+/** Proveedor de `GET /compras/proveedores` (ProveedoresService). */
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  categoria: string;
+  contacto: string;
+  telefono: string;
+  email: string;
+  activo: boolean;
+  /** Numero de ordenes asociadas. */
+  ordenes: number;
+  /** Total comprado (ordenes no canceladas). */
+  total: number;
+}
+
+/** Campos crudos que devuelven `POST`/`PATCH /compras/proveedores`. */
+export interface ProveedorBase {
+  id: string;
+  nombre: string;
+  categoria: string | null;
+  contacto: string | null;
+  telefono: string | null;
+  email: string | null;
+  activo: boolean;
+  createdAt: string;
+}
+
+/** `ProveedorQueryDto`. `activo` viaja como 'true' | 'false'. */
+export interface ProveedorQuery extends PaginationQuery {
+  q?: string;
+  categoria?: string;
+  activo?: 'true' | 'false';
+}
+
+/** `CreateProveedorDto` — nombre minimo 2 chars. */
+export interface CreateProveedorPayload {
+  nombre: string;
+  categoria?: string;
+  contacto?: string;
+  telefono?: string;
+  email?: string;
+}
+
+/** `UpdateProveedorDto` — todos opcionales. */
+export interface UpdateProveedorPayload {
+  nombre?: string;
+  categoria?: string;
+  contacto?: string;
+  telefono?: string;
+  email?: string;
+  activo?: boolean;
+}

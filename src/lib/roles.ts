@@ -102,6 +102,9 @@ export function hasAnyPermission(
 export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   '/dashboard': null,
   '/perfil': null,
+  // Respaldada por `GET/DELETE /auth/sesiones`: solo exige sesion valida,
+  // no un permiso concreto (igual que /perfil).
+  '/seguridad': null,
   // Modulos visuales aun sin API: disponibles para cualquier sesion valida.
   '/ventas': null,
   '/caja': null,
@@ -109,8 +112,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   '/inventario': null,
   '/kardex': null,
   '/compras': null,
-  '/asistencia': null,
-  '/seguridad': null,
+  '/asistencia': 'asistencia:leer',
   '/usuarios': 'usuarios:leer',
   '/sucursales': 'establecimientos:leer',
   '/roles': 'roles:leer',
@@ -157,6 +159,7 @@ const MODULE_SCOPE = {
   roles: 'roles',
   permisos: 'permisos',
   sucursales: 'establecimientos',
+  asistencia: 'asistencia',
 } as const;
 
 /** Permisos que el backend no define y hay que remapear al que si existe. */

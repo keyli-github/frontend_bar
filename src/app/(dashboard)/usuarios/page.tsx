@@ -197,6 +197,26 @@ export default function UsuariosPage() {
 
   const sedesActivas = useMemo(() => sedes.filter((sede) => sede.activo), [sedes]);
 
+  /**
+   * KPIs agregados por jerarquia (nivel: SUPERADMIN=100, ADMIN=50, empleados=10):
+   *   - Administradores: 50 <= nivel < 100 (excluye SUPERADMIN).
+   *   - Empleados:       nivel < 50.
+   * Suma `_count.usuarios` de cada grupo en vez de mostrar una card por rol.
+   */
+  const roleKpis = useMemo(() => {
+    let administradores = 0;
+    let empleados = 0;
+    for (const rol of roles) {
+      const usuarios = rol._count?.usuarios ?? 0;
+      if (rol.nivel >= 50 && rol.nivel < 100) administradores += usuarios;
+      else if (rol.nivel < 50) empleados += usuarios;
+    }
+    return [
+      { key: 'administradores', label: 'Administradores', total: administradores },
+      { key: 'empleados', label: 'Empleados', total: empleados },
+    ];
+  }, [roles]);
+
   const visibles = useMemo(() => {
     const query = search.trim().toLowerCase();
     return usuarios.filter((usuario) => {
@@ -299,15 +319,15 @@ export default function UsuariosPage() {
         </p>
       )}
 
-      <Bones name="usuarios-kpis" loading={catalogosCargando} placeholder={<BoneKpis count={4} />}>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
-          {roles.slice(0, 4).map((rol) => (
-            <div key={rol.id} className="surface px-3 py-2 lg:px-4 lg:py-3">
+      <Bones name="usuarios-kpis" loading={catalogosCargando} placeholder={<BoneKpis count={2} />}>
+        <div className="grid grid-cols-2 gap-3 stagger-children">
+          {roleKpis.map((kpi) => (
+            <div key={kpi.key} className="surface px-3 py-2 lg:px-4 lg:py-3">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                {getRoleLabel(rol.nombre)}
+                {kpi.label}
               </p>
               <p className="mt-1 font-mono text-base font-bold text-foreground lg:text-lg">
-                {rol._count.usuarios}
+                {kpi.total}
               </p>
             </div>
           ))}

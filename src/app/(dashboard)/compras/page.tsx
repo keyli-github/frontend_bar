@@ -1,65 +1,659 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { usePagination } from '@/hooks/use-pagination';
+/** Compras: ordenes de compra + proveedores, conectado a ComprasController. */
+import { useState, useEffect, useCallback } from 'react';
+
 import { Pagination } from '@/components/shared/pagination';
-
-import { mockPurchaseOrders, mockProveedores } from '@/lib/mock-data';
-import type { PurchaseOrder } from '@/types';
-import { Plus, Phone, User, X, Package, CheckCircle2, Clock, Truck } from 'lucide-react';
+import { Bones, BoneTable, BoneCards } from '@/components/shared/bones';
+import { EmptyState } from '@/components/shared/empty-state';
+import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
+import { useAuthStore } from '@/store/auth-store';
+import { comprasApi, productosApi, ApiError } from '@/lib/api';
+import { hasPermission } from '@/lib/roles';
 import { cn } from '@/lib/utils';
+import type {
+  Compra, CompraQuery, CompraEstado,
+  Proveedor, ProveedorQuery, CreateProveedorPayload,
+  CreateCompraPayload, CreateCompraItem,
+  Producto,
+} from '@/types/api';
+import {
+  Plus, Phone, User, Mail, X, Package, CheckCircle2, Trash2,
+  ShoppingBag, Truck,
+} from 'lucide-react';
 
-const orderFilters = ['Todas', 'Pendiente', 'Enviada', 'Recibida', 'Cancelada'];
+const PAGE_SIZE = 15;
+const PROV_PAGE_SIZE = 12;
 
-const estadoBadge: Record<string, string> = {
+const orderFilters: Array<'Todas' | CompraEstado> = ['Todas', 'PENDIENTE', 'ENVIADA', 'RECIBIDA', 'CANCELADA'];
+
+const estadoBadge: Record<CompraEstado, string> = {
   PENDIENTE: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
   ENVIADA: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
   RECIBIDA: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
   CANCELADA: 'bg-zinc-500/10 border-zinc-500/30 text-zinc-400',
 };
 
-export default function ComprasPage() {
-  const [activeTab, setActiveTab] = useState<'ordenes' | 'proveedores'>('ordenes');
-  const [statusFilter, setStatusFilter] = useState('Todas');
-  const [showNewOrder, setShowNewOrder] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+const fmt = (n: number) => '$' + n.toLocaleString('es-CO');
 
-  const filteredOrders = mockPurchaseOrders.filter((o) => {
-    if (statusFilter === 'Todas') return true;
-    return o.estado === statusFilter.toUpperCase();
-  });
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof ApiError ? error.message : fallback;
 
-  const { page: cPage, totalPages: cPages, total: cTotal, paginated: cPaginated, goTo: cGoTo } = usePagination(filteredOrders, { pageSize: 8 });
+/* ─── DETALLE ORDEN (carga items reales) ─── */
+function OrderDetailModal({
+  order, canEdit, onClose, onChanged,
+}: {
+  order: Compra;
+  canEdit: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [full, setFull] = useState<Compra | null>(order.items ? order : null);
+  const [loading, setLoading] = useState(!order.items);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const pendientes = mockPurchaseOrders.filter((o) => o.estado === 'PENDIENTE').length;
-  const recibidas = mockPurchaseOrders.filter((o) => o.estado === 'RECIBIDA').length;
-  const montoPendiente = mockPurchaseOrders.filter((o) => o.estado === 'PENDIENTE')
-    .reduce((s, o) => s + o.total, 0);
+  // `loading` ya arranca en `!order.items`, y el efecto sale temprano cuando la
+  // orden llega completa: no hace falta volver a marcarlo aqui.
+  useEffect(() => {
+    if (order.items) return;
+    let cancelled = false;
+    comprasApi
+      .getCompra(order.id)
+      .then((res) => { if (!cancelled) { setFull(res); setError(null); } })
+      .catch((err: unknown) => { if (!cancelled) setError(errorMessage(err, 'No se pudo cargar el detalle.')); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [order.id, order.items]);
+
+  const data = full ?? order;
+  const items = data.items ?? [];
+
+  const changeEstado = async (estado: CompraEstado) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await comprasApi.cambiarEstadoCompra(order.id, { estado });
+      onChanged();
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err, 'No se pudo cambiar el estado.'));
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--background)" }}><div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !saving && onClose()} />
+      <div className="relative w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl animate-scale-in overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <h3 className="font-bold text-foreground text-base">{data.orden}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{data.proveedor} · {data.fecha}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn('px-2.5 py-0.5 rounded border text-[10px] font-bold', estadoBadge[data.estado])}>
+              {data.estado}
+            </span>
+            <button onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-foreground p-1"><X size={18} /></button>
+          </div>
+        </div>
+
+        {/* Timeline */}
+        <div className="px-5 py-4 border-b border-border">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Estado de la orden</p>
+          <div className="flex items-center gap-2">
+            {(['PENDIENTE', 'ENVIADA', 'RECIBIDA'] as const).map((s, i) => {
+              const steps = ['PENDIENTE', 'ENVIADA', 'RECIBIDA', 'CANCELADA'];
+              const currentIdx = steps.indexOf(data.estado);
+              const isActive = i <= currentIdx && data.estado !== 'CANCELADA';
+              const isCurrent = s === data.estado;
+              return (
+                <div key={s} className="flex items-center flex-1">
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold border',
+                      isCurrent ? 'bg-amber-500 border-amber-500 text-black' :
+                      isActive ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500' :
+                      'bg-muted/50 border-border text-muted-foreground'
+                    )}>
+                      {isActive && !isCurrent ? <CheckCircle2 size={12} /> : i + 1}
+                    </div>
+                    <span className={cn('text-[10px] font-medium hidden sm:block',
+                      isCurrent ? 'text-amber-500' : isActive ? 'text-emerald-500' : 'text-muted-foreground'
+                    )}>{s}</span>
+                  </div>
+                  {i < 2 && <div className={cn('flex-1 h-px mx-1', isActive && i < currentIdx ? 'bg-emerald-500/50' : 'bg-border')} />}
+                </div>
+              );
+            })}
+          </div>
+          {data.estado === 'CANCELADA' && (
+            <p className="text-[11px] text-zinc-400 mt-2">Esta orden fue cancelada.</p>
+          )}
+        </div>
+
+        {/* Items reales */}
+        <div className="px-5 py-4 overflow-y-auto flex-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Artículos ({data.articulos})
+          </p>
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-10 rounded-lg bg-muted/50 animate-pulse" />
+              ))}
+            </div>
+          ) : error ? (
+            <p role="alert" className="text-xs text-destructive">{error}</p>
+          ) : items.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Sin artículos.</p>
+          ) : (
+            <div className="space-y-2">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                      <Package size={13} className="text-amber-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-foreground truncate">{item.producto}</p>
+                      <p className="text-[10px] text-muted-foreground/70 font-mono">{item.codigo}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-right flex-shrink-0">
+                    <span className="text-muted-foreground text-xs">{item.cantidad} × {fmt(item.costoUnit)}</span>
+                    <span className="font-mono font-semibold text-foreground">{fmt(item.subtotal)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.notas && (
+            <div className="mt-4 rounded-lg bg-muted/40 border border-border px-3 py-2">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Notas</p>
+              <p className="text-xs text-foreground mt-0.5">{data.notas}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer + transiciones */}
+        <div className="px-5 py-4 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
+          <div className="text-sm">
+            <span className="text-muted-foreground">Total: </span>
+            <span className="font-bold text-foreground font-mono">{fmt(data.total)}</span>
+          </div>
+          <div className="flex gap-2 flex-wrap justify-end">
+            {canEdit && data.estado === 'PENDIENTE' && (
+              <button onClick={() => changeEstado('ENVIADA')} disabled={saving}
+                className="px-3 py-2 rounded-xl bg-blue-500 text-white text-xs font-bold hover:bg-blue-400 transition-all disabled:opacity-50">
+                Marcar enviada
+              </button>
+            )}
+            {canEdit && data.estado === 'ENVIADA' && (
+              <button onClick={() => changeEstado('RECIBIDA')} disabled={saving}
+                className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-400 transition-all disabled:opacity-50">
+                Marcar recibida
+              </button>
+            )}
+            {canEdit && (data.estado === 'PENDIENTE' || data.estado === 'ENVIADA') && (
+              <button onClick={() => changeEstado('CANCELADA')} disabled={saving}
+                className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/25 text-red-500 text-xs font-bold hover:bg-red-500/20 transition-all disabled:opacity-50">
+                Cancelar
+              </button>
+            )}
+            <button onClick={onClose} disabled={saving} className="px-3 py-2 rounded-xl bg-muted/60 border border-border text-foreground text-xs hover:bg-muted transition-colors disabled:opacity-50">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── NUEVA ORDEN (con item builder) ─── */
+interface DraftItem { productoId: string; cantidad: number; costoUnit: number; }
+
+function NewOrderModal({
+  proveedores, onClose, onCreated,
+}: {
+  proveedores: Proveedor[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [proveedorId, setProveedorId] = useState('');
+  const [eta, setEta] = useState('');
+  const [notas, setNotas] = useState('');
+  const [items, setItems] = useState<DraftItem[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [loadingProds, setLoadingProds] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    productosApi
+      .listProductos({ limite: 200, activo: 'true' })
+      .then((res) => { if (!cancelled) setProductos(res.data); })
+      .catch(() => { if (!cancelled) setError('No se pudieron cargar los productos.'); })
+      .finally(() => { if (!cancelled) setLoadingProds(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const addItem = () => setItems((it) => [...it, { productoId: '', cantidad: 1, costoUnit: 0 }]);
+  const removeItem = (i: number) => setItems((it) => it.filter((_, idx) => idx !== i));
+  const updateItem = (i: number, patch: Partial<DraftItem>) =>
+    setItems((it) => it.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+
+  const onSelectProducto = (i: number, productoId: string) => {
+    const prod = productos.find((p) => p.id === productoId);
+    updateItem(i, { productoId, costoUnit: prod ? prod.precioCosto : 0 });
+  };
+
+  const total = items.reduce((s, it) => s + it.cantidad * it.costoUnit, 0);
+  const validItems = items.filter((it) => it.productoId && it.cantidad > 0);
+  const valid = proveedorId !== '' && validItems.length > 0;
+
+  const submit = async () => {
+    if (!valid) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: CreateCompraPayload = {
+        proveedorId,
+        eta: eta || undefined,
+        notas: notas.trim() || undefined,
+        items: validItems.map<CreateCompraItem>((it) => ({
+          productoId: it.productoId,
+          cantidad: it.cantidad,
+          costoUnit: it.costoUnit,
+        })),
+      };
+      await comprasApi.createCompra(payload);
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err, 'No se pudo crear la orden.'));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !saving && onClose()} />
+      <div className="relative w-full max-w-2xl bg-popover border border-border rounded-2xl shadow-2xl animate-scale-in overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center px-5 py-4 border-b border-border">
+          <h3 className="font-bold text-foreground text-base">NUEVA ORDEN DE COMPRA</h3>
+          <button onClick={onClose} disabled={saving}><X size={20} className="text-muted-foreground" /></button>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Proveedor *</label>
+              <select
+                value={proveedorId}
+                onChange={(e) => setProveedorId(e.target.value)}
+                className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground focus:outline-none focus:border-amber-500/50 transition-all text-sm"
+              >
+                <option value="">Seleccionar proveedor...</option>
+                {proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fecha estimada (ETA)</label>
+              <input
+                type="date"
+                value={eta}
+                onChange={(e) => setEta(e.target.value)}
+                className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground focus:outline-none focus:border-amber-500/50 transition-all text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Item builder */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Artículos *</label>
+              <button
+                onClick={addItem}
+                disabled={loadingProds}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-500 text-xs font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+              >
+                <Plus size={12} /> Agregar
+              </button>
+            </div>
+
+            {items.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                {loadingProds ? 'Cargando productos…' : 'Agrega al menos un artículo a la orden.'}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {items.map((it, i) => {
+                  const subtotal = it.cantidad * it.costoUnit;
+                  return (
+                    <div key={i} className="flex items-end gap-2 rounded-lg bg-muted/30 border border-border p-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[9px] text-muted-foreground uppercase tracking-wider">Producto</label>
+                        <select
+                          value={it.productoId}
+                          onChange={(e) => onSelectProducto(i, e.target.value)}
+                          className="w-full mt-1 h-9 px-2 rounded-lg bg-card border border-border text-foreground text-xs focus:outline-none focus:border-amber-500/50 transition-all"
+                        >
+                          <option value="">Seleccionar...</option>
+                          {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.codigo})</option>)}
+                        </select>
+                      </div>
+                      <div className="w-16">
+                        <label className="text-[9px] text-muted-foreground uppercase tracking-wider">Cant.</label>
+                        <input
+                          type="number" min={1} value={it.cantidad || ''}
+                          onChange={(e) => updateItem(i, { cantidad: Number(e.target.value) })}
+                          className="w-full mt-1 h-9 px-2 rounded-lg bg-card border border-border text-foreground text-xs text-center focus:outline-none focus:border-amber-500/50 transition-all"
+                        />
+                      </div>
+                      <div className="w-24">
+                        <label className="text-[9px] text-muted-foreground uppercase tracking-wider">Costo unit.</label>
+                        <input
+                          type="number" min={0} value={it.costoUnit || ''}
+                          onChange={(e) => updateItem(i, { costoUnit: Number(e.target.value) })}
+                          className="w-full mt-1 h-9 px-2 rounded-lg bg-card border border-border text-foreground text-xs text-right focus:outline-none focus:border-amber-500/50 transition-all"
+                        />
+                      </div>
+                      <div className="w-20 text-right">
+                        <label className="text-[9px] text-muted-foreground uppercase tracking-wider block">Subtotal</label>
+                        <p className="mt-1 h-9 flex items-center justify-end text-xs font-mono font-semibold text-foreground">{fmt(subtotal)}</p>
+                      </div>
+                      <button
+                        onClick={() => removeItem(i)}
+                        className="mb-0.5 p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors flex-shrink-0"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notas</label>
+            <textarea
+              rows={2}
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              placeholder="Instrucciones especiales..."
+              className="w-full mt-1.5 px-3 py-2 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50 transition-all text-sm resize-none"
+            />
+          </div>
+
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
+          <div className="text-sm">
+            <span className="text-muted-foreground">Total: </span>
+            <span className="font-bold text-foreground font-mono">{fmt(total)}</span>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} disabled={saving} className="h-10 px-4 rounded-xl bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={submit} disabled={!valid || saving} className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+              {saving ? 'CREANDO…' : 'CREAR ORDEN'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── NUEVO PROVEEDOR ─── */
+function NewProveedorModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void; }) {
+  const [form, setForm] = useState<CreateProveedorPayload>({ nombre: '', categoria: '', contacto: '', telefono: '', email: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const set = <K extends keyof CreateProveedorPayload>(k: K, v: CreateProveedorPayload[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.nombre.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await comprasApi.createProveedor({
+        nombre: form.nombre.trim(),
+        categoria: form.categoria?.trim() || undefined,
+        contacto: form.contacto?.trim() || undefined,
+        telefono: form.telefono?.trim() || undefined,
+        email: form.email?.trim() || undefined,
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err, 'No se pudo crear el proveedor.'));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !saving && onClose()} />
+      <div className="relative w-full max-w-md bg-popover border border-border rounded-2xl p-6 animate-scale-in">
+        <div className="flex justify-between items-center mb-5">
+          <h3 className="font-bold text-foreground text-base">NUEVO PROVEEDOR</h3>
+          <button onClick={onClose} disabled={saving}><X size={20} className="text-muted-foreground" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nombre *</label>
+            <input value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Distribuidora XYZ"
+              className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Categoría</label>
+            <input value={form.categoria ?? ''} onChange={(e) => set('categoria', e.target.value)} placeholder="Licores, cervezas..."
+              className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contacto</label>
+              <input value={form.contacto ?? ''} onChange={(e) => set('contacto', e.target.value)}
+                className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Teléfono</label>
+              <input value={form.telefono ?? ''} onChange={(e) => set('telefono', e.target.value)}
+                className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</label>
+            <input type="email" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)}
+              className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all" />
+          </div>
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+          <div className="flex gap-3 pt-2">
+            <button onClick={onClose} disabled={saving} className="flex-1 h-10 rounded-lg bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={submit} disabled={!form.nombre.trim() || saving} className="flex-1 h-10 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all disabled:opacity-40">
+              {saving ? 'GUARDANDO…' : 'CREAR'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── MAIN PAGE ─── */
+export default function ComprasPage() {
+  const permisos = useAuthStore((state) => state.permisos);
+  const boneyardBuild = useBoneyardBuild();
+  const canRead = boneyardBuild || hasPermission(permisos, 'compras:leer');
+  const canCreate = hasPermission(permisos, 'compras:crear');
+  const canEdit = hasPermission(permisos, 'compras:editar');
+
+  const [activeTab, setActiveTab] = useState<'ordenes' | 'proveedores'>('ordenes');
+
+  // Ordenes
+  const [statusFilter, setStatusFilter] = useState<'Todas' | CompraEstado>('Todas');
+  const [ordenes, setOrdenes] = useState<Compra[]>([]);
+  const [oPagina, setOPagina] = useState(1);
+  const [oTotal, setOTotal] = useState(0);
+  const [oPaginas, setOPaginas] = useState(1);
+  const [oLoading, setOLoading] = useState(true);
+  const [oError, setOError] = useState<string | null>(null);
+  const [oReload, setOReload] = useState(0);
+
+  // Proveedores
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [pPagina, setPPagina] = useState(1);
+  const [pTotal, setPTotal] = useState(0);
+  const [pPaginas, setPPaginas] = useState(1);
+  const [pLoading, setPLoading] = useState(true);
+  const [pError, setPError] = useState<string | null>(null);
+  const [pReload, setPReload] = useState(0);
+
+  // Modales
+  const [showNewOrder, setShowNewOrder] = useState(false);
+  const [showNewProv, setShowNewProv] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Compra | null>(null);
+
+  // Fetch ordenes
+  useEffect(() => {
+    if (!canRead || activeTab !== 'ordenes') return;
+    let cancelled = false;
+    const query: CompraQuery = { pagina: oPagina, limite: PAGE_SIZE };
+    if (statusFilter !== 'Todas') query.estado = statusFilter;
+    comprasApi
+      .listCompras(query)
+      .then((res) => {
+        if (cancelled) return;
+        setOrdenes(res.data);
+        setOTotal(res.total);
+        setOPaginas(res.totalPaginas || 1);
+        setOError(null);
+      })
+      .catch((err: unknown) => { if (!cancelled) setOError(errorMessage(err, 'No se pudieron cargar las ordenes.')); })
+      .finally(() => { if (!cancelled) setOLoading(false); });
+    return () => { cancelled = true; };
+  }, [canRead, activeTab, oPagina, statusFilter, oReload]);
+
+  // Fetch proveedores
+  useEffect(() => {
+    if (!canRead || activeTab !== 'proveedores') return;
+    let cancelled = false;
+    const query: ProveedorQuery = { pagina: pPagina, limite: PROV_PAGE_SIZE };
+    comprasApi
+      .listProveedores(query)
+      .then((res) => {
+        if (cancelled) return;
+        setProveedores(res.data);
+        setPTotal(res.total);
+        setPPaginas(res.totalPaginas || 1);
+        setPError(null);
+      })
+      .catch((err: unknown) => { if (!cancelled) setPError(errorMessage(err, 'No se pudieron cargar los proveedores.')); })
+      .finally(() => { if (!cancelled) setPLoading(false); });
+    return () => { cancelled = true; };
+  }, [canRead, activeTab, pPagina, pReload]);
+
+  // Los spinners se activan en los handlers, no dentro de los efectos, para no
+  // encadenar renders. El estado inicial ya arranca en `true`.
+  const irAOrdenPagina = useCallback((page: number) => {
+    setOLoading(true);
+    setOPagina(page);
+  }, []);
+
+  const filtrarOrdenes = useCallback((estado: 'Todas' | CompraEstado) => {
+    setOLoading(true);
+    setStatusFilter(estado);
+    setOPagina(1);
+  }, []);
+
+  const recargarOrdenes = useCallback(() => {
+    setOLoading(true);
+    setOReload((k) => k + 1);
+  }, []);
+
+  const irAProveedorPagina = useCallback((page: number) => {
+    setPLoading(true);
+    setPPagina(page);
+  }, []);
+
+  const recargarProveedores = useCallback(() => {
+    setPLoading(true);
+    setPReload((k) => k + 1);
+  }, []);
+
+  /** Proveedores para el select de "nueva orden" (carga on-demand al abrir). */
+  const [orderProvs, setOrderProvs] = useState<Proveedor[]>([]);
+  const openNewOrder = useCallback(async () => {
+    setShowNewOrder(true);
+    try {
+      const res = await comprasApi.listProveedores({ limite: 200 });
+      setOrderProvs(res.data);
+    } catch {
+      setOrderProvs([]);
+    }
+  }, []);
+
+  if (!canRead) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        No tienes permiso para ver las compras.
+      </div>
+    );
+  }
+
+  // KPIs de la pagina actual de ordenes
+  const pagePendientes = ordenes.filter((o) => o.estado === 'PENDIENTE').length;
+  const pageRecibidas = ordenes.filter((o) => o.estado === 'RECIBIDA').length;
+  const pageMontoPend = ordenes.filter((o) => o.estado === 'PENDIENTE').reduce((s, o) => s + o.total, 0);
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
+      <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Compras</h1>
             <p className="text-sm text-muted-foreground mt-1">Ordenes de compra y proveedores</p>
           </div>
-          <button
-            onClick={() => setShowNewOrder(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all active:scale-[0.98] w-fit"
-          >
-            <Plus size={16} />
-            NUEVA ORDEN
-          </button>
+          {canCreate && (
+            activeTab === 'ordenes' ? (
+              <button
+                onClick={openNewOrder}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all active:scale-[0.98] w-fit"
+              >
+                <Plus size={16} /> NUEVA ORDEN
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowNewProv(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all active:scale-[0.98] w-fit"
+              >
+                <Plus size={16} /> NUEVO PROVEEDOR
+              </button>
+            )
+          )}
         </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
-            { label: 'ORDENES MES', value: String(mockPurchaseOrders.length), color: 'text-foreground' },
-            { label: 'PENDIENTES', value: String(pendientes), color: 'text-amber-500' },
-            { label: 'RECIBIDAS', value: String(recibidas), color: 'text-emerald-400' },
-            { label: 'MONTO PENDIENTE', value: '$' + (montoPendiente / 1000000).toFixed(2) + 'M', color: 'text-amber-500' },
+            { label: 'TOTAL ORDENES', value: String(oTotal), color: 'text-foreground' },
+            { label: 'PENDIENTES (PÁGINA)', value: String(pagePendientes), color: 'text-amber-500' },
+            { label: 'RECIBIDAS (PÁGINA)', value: String(pageRecibidas), color: 'text-emerald-400' },
+            { label: 'MONTO PEND. (PÁGINA)', value: fmt(pageMontoPend), color: 'text-amber-500' },
           ].map((k) => (
             <div key={k.label} className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3">
               <p className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">{k.label}</p>
@@ -70,15 +664,13 @@ export default function ComprasPage() {
 
         {/* Tabs */}
         <div className="flex gap-6 border-b border-border animate-fade-in-up">
-          {[{ id: 'ordenes', label: 'Ordenes De Compra' }, { id: 'proveedores', label: 'Proveedores' }].map((tab) => (
+          {[{ id: 'ordenes', label: 'Ordenes de Compra' }, { id: 'proveedores', label: 'Proveedores' }].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'ordenes' | 'proveedores')}
               className={cn(
                 'pb-3 text-sm font-medium border-b-2 -mb-px transition-all',
-                activeTab === tab.id
-                  ? 'border-amber-500 text-amber-500'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                activeTab === tab.id ? 'border-amber-500 text-amber-500' : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
               {tab.label}
@@ -86,258 +678,153 @@ export default function ComprasPage() {
           ))}
         </div>
 
-        {/* Ordenes tab */}
+        {/* ── ORDENES TAB ── */}
         {activeTab === 'ordenes' && (
           <>
+            {oError && (
+              <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">{oError}</p>
+            )}
+
             <div className="flex gap-2 overflow-x-auto pb-1 animate-fade-in-up">
-              {orderFilters.map((f) => {
-                const count = f === 'Todas' ? null :
-                  mockPurchaseOrders.filter((o) => o.estado === f.toUpperCase()).length;
-                return (
-                  <button
-                    key={f}
-                    onClick={() => setStatusFilter(f)}
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
-                      statusFilter === f
-                        ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
-                        : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {f}{count !== null ? ` (${count})` : ''}
-                  </button>
-                );
-              })}
+              {orderFilters.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => filtrarOrdenes(f)}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                    statusFilter === f ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  {f === 'Todas' ? 'Todas' : f}
+                </button>
+              ))}
             </div>
 
             <div className="rounded-xl border border-border bg-card overflow-hidden animate-fade-in-up">
-              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      {['Orden', 'Fecha', 'Proveedor', 'Articulos', 'Total', 'Estado', 'ETA', 'Solicitado por', ''].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {cPaginated.map((order) => (
-                      <tr key={order.orden} className="hover:bg-muted/40 transition-colors">
-                        <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium">{order.orden}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">{order.fecha}</td>
-                        <td className="px-4 py-3 text-foreground">{order.proveedor}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{order.articulos} items</td>
-                        <td className="px-4 py-3 text-foreground font-semibold font-mono">${order.total.toLocaleString('es-CO')}</td>
-                        <td className="px-4 py-3">
-                          <span className={cn('px-2 py-0.5 rounded border text-[10px] font-bold', estadoBadge[order.estado])}>
-                            {order.estado}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">{order.eta || '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">{order.solicitadoPor}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setSelectedOrder(order)}
-                              className="px-3 py-1.5 rounded-lg bg-muted/60 border border-border text-foreground text-xs hover:bg-muted transition-colors"
-                            >
-                              Ver detalle
-                            </button>
-                            {order.estado === 'ENVIADA' && (
-                              <button className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors">
-                                Recibir
+              <Bones name="compras-ordenes" loading={oLoading} placeholder={<BoneTable rows={PAGE_SIZE} cols={9} />}>
+                {ordenes.length === 0 ? (
+                  <EmptyState icon={<ShoppingBag size={22} />} title="Sin ordenes" description="No hay ordenes con los filtros aplicados." />
+                ) : (
+                  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          {['Orden', 'Fecha', 'Proveedor', 'Articulos', 'Total', 'Estado', 'ETA', 'Solicitado por', ''].map((h) => (
+                            <th key={h} className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {ordenes.map((order) => (
+                          <tr key={order.id} className="hover:bg-muted/40 transition-colors">
+                            <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium">{order.orden}</td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">{order.fecha}</td>
+                            <td className="px-4 py-3 text-foreground">{order.proveedor}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{order.articulos} items</td>
+                            <td className="px-4 py-3 text-foreground font-semibold font-mono">{fmt(order.total)}</td>
+                            <td className="px-4 py-3">
+                              <span className={cn('px-2 py-0.5 rounded border text-[10px] font-bold', estadoBadge[order.estado])}>{order.estado}</span>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">{order.eta || '—'}</td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">{order.solicitadoPor}</td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => setSelectedOrder(order)}
+                                className="px-3 py-1.5 rounded-lg bg-muted/60 border border-border text-foreground text-xs hover:bg-muted transition-colors"
+                              >
+                                Ver detalle
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Bones>
+              <div className="border-t border-border px-4">
+                <Pagination page={oPagina} totalPages={oPaginas} total={oTotal} pageSize={PAGE_SIZE} onPageChange={irAOrdenPagina} />
               </div>
             </div>
           </>
         )}
 
-        {/* Proveedores tab */}
+        {/* ── PROVEEDORES TAB ── */}
         {activeTab === 'proveedores' && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-            {mockProveedores.map((prov) => (
-              <div key={prov.id} className="rounded-xl border border-border bg-card p-5 hover:border-border transition-colors">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-amber-500 text-lg">🧳</span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">{prov.nombre}</h3>
-                    <p className="text-xs text-amber-500">{prov.categoria}</p>
-                  </div>
+          <>
+            {pError && (
+              <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">{pError}</p>
+            )}
+
+            <Bones name="compras-proveedores" loading={pLoading} placeholder={<BoneCards count={6} />}>
+              {proveedores.length === 0 ? (
+                <EmptyState icon={<Truck size={22} />} title="Sin proveedores" description="Crea tu primer proveedor." />
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+                  {proveedores.map((prov) => (
+                    <div key={prov.id} className="rounded-xl border border-border bg-card p-5 hover:border-amber-500/30 transition-colors">
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-amber-500 text-lg">🧳</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-foreground truncate">{prov.nombre}</h3>
+                          {prov.categoria && <p className="text-xs text-amber-500">{prov.categoria}</p>}
+                          {!prov.activo && <span className="text-[10px] text-zinc-500">Inactivo</span>}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 mb-4">
+                        {prov.contacto && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground"><User size={12} />{prov.contacto}</div>
+                        )}
+                        {prov.telefono && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground"><Phone size={12} />{prov.telefono}</div>
+                        )}
+                        {prov.email && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate"><Mail size={12} />{prov.email}</div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-muted/60 p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Ordenes</p>
+                          <p className="text-lg font-bold text-foreground">{prov.ordenes}</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/60 p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Total</p>
+                          <p className="text-sm font-bold text-amber-500 font-mono">{fmt(prov.total)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="space-y-1.5 mb-4">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <User size={12} />
-                    {prov.contacto}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Phone size={12} />
-                    {prov.telefono}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg bg-muted/60 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Ordenes</p>
-                    <p className="text-lg font-bold text-foreground">{prov.ordenes}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/60 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="text-sm font-bold text-amber-500">{prov.total}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </Bones>
+            <Pagination page={pPagina} totalPages={pPaginas} total={pTotal} pageSize={PROV_PAGE_SIZE} onPageChange={irAProveedorPagina} />
+          </>
         )}
       </div>
 
-      {/* New Order Modal */}
+      {/* ── MODALES ── */}
       {showNewOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowNewOrder(false)} />
-          <div className="relative w-full max-w-md bg-popover border border-border rounded-2xl p-6 animate-scale-in">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-bold text-foreground text-lg">NUEVA ORDEN DE COMPRA</h3>
-              <button onClick={() => setShowNewOrder(false)}><X size={20} className="text-muted-foreground" /></button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wider">Proveedor</label>
-                <select className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-muted-foreground focus:outline-none focus:border-amber-500/50 transition-all text-sm">
-                  <option value="">Seleccionar proveedor...</option>
-                  {mockProveedores.map((p) => <option key={p.id}>{p.nombre}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wider">Fecha estimada de entrega</label>
-                <input type="date" className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-muted-foreground focus:outline-none focus:border-amber-500/50 transition-all text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wider">Notas adicionales</label>
-                <textarea
-                  rows={3}
-                  placeholder="Instrucciones especiales..."
-                  className="w-full mt-1.5 px-3 py-2 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50 transition-all text-sm resize-none"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowNewOrder(false)} className="flex-1 h-10 rounded-lg bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={() => setShowNewOrder(false)} className="flex-1 h-10 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all">
-                  CREAR ORDEN
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <NewOrderModal
+          proveedores={orderProvs}
+          onClose={() => setShowNewOrder(false)}
+          onCreated={() => { setOPagina(1); recargarOrdenes(); }}
+        />
       )}
-
-      {/* ── MODAL DETALLE ORDEN ── */}
+      {showNewProv && (
+        <NewProveedorModal
+          onClose={() => setShowNewProv(false)}
+          onCreated={() => { setPPagina(1); recargarProveedores(); }}
+        />
+      )}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedOrder(null)} />
-          <div className="relative w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl animate-scale-in overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <div>
-                <h3 className="font-bold text-foreground text-base">{selectedOrder.orden}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{selectedOrder.proveedor} · {selectedOrder.fecha}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={cn('px-2.5 py-0.5 rounded border text-[10px] font-bold', estadoBadge[selectedOrder.estado])}>
-                  {selectedOrder.estado}
-                </span>
-                <button onClick={() => setSelectedOrder(null)} className="text-muted-foreground hover:text-foreground p-1"><X size={18} /></button>
-              </div>
-            </div>
-
-            {/* Timeline de estado */}
-            <div className="px-5 py-4 border-b border-border">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Estado de la orden</p>
-              <div className="flex items-center gap-2">
-                {['PENDIENTE', 'ENVIADA', 'RECIBIDA'].map((s, i) => {
-                  const steps = ['PENDIENTE', 'ENVIADA', 'RECIBIDA', 'CANCELADA'];
-                  const currentIdx = steps.indexOf(selectedOrder.estado);
-                  const isActive = i <= currentIdx && selectedOrder.estado !== 'CANCELADA';
-                  const isCurrent = s === selectedOrder.estado;
-                  return (
-                    <div key={s} className="flex items-center flex-1">
-                      <div className={cn('flex items-center gap-1.5 flex-1')}>
-                        <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold border',
-                          isCurrent ? 'bg-amber-500 border-amber-500 text-black' :
-                          isActive ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500' :
-                          'bg-muted/50 border-border text-muted-foreground'
-                        )}>
-                          {isActive && !isCurrent ? <CheckCircle2 size={12} /> : i + 1}
-                        </div>
-                        <span className={cn('text-[10px] font-medium hidden sm:block',
-                          isCurrent ? 'text-amber-500' : isActive ? 'text-emerald-500' : 'text-muted-foreground'
-                        )}>{s}</span>
-                      </div>
-                      {i < 2 && <div className={cn('flex-1 h-px mx-1', isActive && i < currentIdx ? 'bg-emerald-500/50' : 'bg-border')} />}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Items mock */}
-            <div className="px-5 py-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Artículos ({selectedOrder.articulos} items)
-              </p>
-              <div className="space-y-2">
-                {Array.from({ length: selectedOrder.articulos }, (_, i) => ({
-                  name: ['Whiskey Old Parr 750ml','Corona Extra x24','Vodka Absolut 750ml','Tequila Herradura','Ron Medellín 8 Años','Club Colombia x24','Heineken x24','Coca-Cola 250ml x24'][i % 8],
-                  qty: [6, 48, 12, 6, 12, 48, 24, 4][i % 8],
-                  price: [95000, 108000, 68000, 82000, 58000, 91200, 120000, 62000][i % 8],
-                })).map((item, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                        <Package size={13} className="text-amber-500" />
-                      </div>
-                      <span className="text-foreground">{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-right">
-                      <span className="text-muted-foreground text-xs">{item.qty} uds</span>
-                      <span className="font-mono font-semibold text-foreground">${(item.price * item.qty / 1000).toFixed(0)}k</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-4 border-t border-border bg-muted/20 flex items-center justify-between">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total orden: </span>
-                <span className="font-bold text-foreground font-mono">${selectedOrder.total.toLocaleString('es-CO')}</span>
-              </div>
-              <div className="flex gap-2">
-                {selectedOrder.estado === 'ENVIADA' && (
-                  <button className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-400 transition-all">
-                    Marcar recibida
-                  </button>
-                )}
-                <button onClick={() => setSelectedOrder(null)} className="px-4 py-2 rounded-xl bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors">
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <OrderDetailModal
+          order={selectedOrder}
+          canEdit={canEdit}
+          onClose={() => setSelectedOrder(null)}
+          onChanged={recargarOrdenes}
+        />
       )}
     </div>
   );

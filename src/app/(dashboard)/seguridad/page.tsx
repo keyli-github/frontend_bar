@@ -1,6 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * Seguridad — dispositivos conectados del usuario autenticado.
+ *
+ * Conectado a:
+ *   GET    /api/auth/sesiones
+ *   DELETE /api/auth/sesiones/:id   (cerrar una sesion)
+ *   DELETE /api/auth/sesiones       (cerrar las demas)
+ *
+ * El backend expone `SessionInfo` (id, deviceName, deviceType, ip, lastUsedAt,
+ * createdAt, actual). No captura user-agent ni geo-IP, por eso aqui no se
+ * pintan "navegador" ni "ubicacion": no existirian datos reales que mostrar.
+ */
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import {
@@ -11,7 +23,6 @@ import {
   Laptop,
   LockKeyhole,
   LogOut,
-  MapPin,
   MonitorSmartphone,
   ShieldCheck,
   Smartphone,
@@ -21,12 +32,12 @@ import {
 import { ConfirmModal } from '@/components/shared/confirm-modal';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatCard } from '@/components/shared/stat-card';
-import { mockSessions } from '@/lib/admin-mock-data';
+import { authApi, ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { ActiveSession } from '@/types';
+import type { SessionInfo } from '@/types/api';
 
 type PendingAction =
-  | { type: 'session'; session: ActiveSession }
+  | { type: 'session'; session: SessionInfo }
   | { type: 'others' }
   | null;
 
@@ -37,38 +48,104 @@ const protections = [
   ['Sesiones visibles', 'Puedes revocar dispositivos remotamente'],
 ];
 
+const dateFmt = new Intl.DateTimeFormat('es-PE', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+const formatDate = (iso: string | null): string =>
+  iso ? dateFmt.format(new Date(iso)) : '—';
+
+/**
+ * En desarrollo el backend ve la IP de loopback (`::1` en IPv6, `127.0.0.1` en
+ * IPv4), porque el cliente y el servidor viven en la misma maquina. Node
+ * ademas antepone `::ffff:` a las IPv4 mapeadas. Se traduce a algo legible.
+ */
+const formatIp = (ip: string | null): string => {
+  if (!ip) return 'oculta';
+  const clean = ip.replace(/^::ffff:/i, '');
+  if (clean === '::1' || clean === '127.0.0.1') return 'Este equipo (local)';
+  return clean;
+};
+
 export default function SeguridadPage() {
-  const [sessions, setSessions] = useState<ActiveSession[]>(() => [...mockSessions]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [processing, setProcessing] = useState(false);
   const [notice, setNotice] = useState('');
+
+  // El setState vive en los callbacks de la promesa, nunca en el cuerpo del
+  // efecto (regla `react-hooks/set-state-in-effect`).
+  useEffect(() => {
+    let cancelled = false;
+    authApi
+      .getSesiones()
+      .then((data) => {
+        if (cancelled) return;
+        setSessions(data);
+        setLoadError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadError(
+          err instanceof ApiError ? err.message : 'No se pudieron cargar las sesiones.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
+
+  const recargar = useCallback(() => {
+    setLoading(true);
+    setReloadToken((n) => n + 1);
+  }, []);
 
   const currentSession = sessions.find((session) => session.actual);
   const otherSessions = sessions.filter((session) => !session.actual);
 
-  const confirmClose = () => {
+  const confirmClose = async () => {
     if (!pendingAction) return;
-
-    if (pendingAction.type === 'others') {
-      const closed = otherSessions.length;
-      setSessions((current) => current.filter((session) => session.actual));
-      setNotice(`${closed} ${closed === 1 ? 'sesión cerrada' : 'sesiones cerradas'} correctamente.`);
-    } else {
-      setSessions((current) => current.filter((session) => session.id !== pendingAction.session.id));
-      setNotice(`La sesión de ${pendingAction.session.deviceName} se cerró correctamente.`);
+    setProcessing(true);
+    try {
+      if (pendingAction.type === 'others') {
+        const closed = otherSessions.length;
+        await authApi.cerrarOtrasSesiones();
+        setNotice(
+          `${closed} ${closed === 1 ? 'sesión cerrada' : 'sesiones cerradas'} correctamente.`,
+        );
+      } else {
+        const name = pendingAction.session.deviceName ?? 'el dispositivo';
+        await authApi.cerrarSesion(pendingAction.session.id);
+        setNotice(`La sesión de ${name} se cerró correctamente.`);
+      }
+      setPendingAction(null);
+      recargar();
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError ? err.message : 'No se pudo cerrar la sesión.',
+      );
+      setPendingAction(null);
+    } finally {
+      setProcessing(false);
     }
-
-    setPendingAction(null);
   };
 
   const modalTitle = pendingAction?.type === 'others' ? 'Cerrar las otras sesiones' : 'Cerrar esta sesión';
   const modalDescription = pendingAction?.type === 'others'
     ? `Se cerrarán ${otherSessions.length} ${otherSessions.length === 1 ? 'sesión activa' : 'sesiones activas'}. Este dispositivo seguirá conectado.`
     : pendingAction?.session
-      ? `Se cerrará el acceso de ${pendingAction.session.deviceName}. Para volver a usarlo será necesario iniciar sesión nuevamente.`
+      ? `Se cerrará el acceso de ${pendingAction.session.deviceName ?? 'este dispositivo'}. Para volver a usarlo será necesario iniciar sesión nuevamente.`
       : '';
 
   return (
-    <div className="min-h-screen bg-background"><main className="space-y-4 p-3 sm:p-4 lg:p-6">
+    <div className="min-h-screen bg-background"><main className="space-y-4 p-3 sm:p-4 lg:p-6">
         <PageHeader
           title="Seguridad"
           subtitle="Administra tu contraseña y revisa los dispositivos conectados."
@@ -93,6 +170,12 @@ export default function SeguridadPage() {
           </div>
         )}
 
+        {loadError && (
+          <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+            {loadError}
+          </div>
+        )}
+
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <section className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -111,23 +194,29 @@ export default function SeguridadPage() {
             </div>
 
             <div className="divide-y divide-border">
-              {sessions.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  action={session.actual ? (
-                    <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] font-bold uppercase text-emerald-600 dark:text-emerald-400">Actual</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setPendingAction({ type: 'session', session })}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 text-xs font-medium text-foreground transition-colors hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-500"
-                    >
-                      <LogOut size={12} /> Cerrar
-                    </button>
-                  )}
-                />
-              ))}
+              {loading ? (
+                <p className="px-4 py-6 text-sm text-muted-foreground">Cargando sesiones…</p>
+              ) : sessions.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-muted-foreground">No hay sesiones activas.</p>
+              ) : (
+                sessions.map((session) => (
+                  <SessionRow
+                    key={session.id}
+                    session={session}
+                    action={session.actual ? (
+                      <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] font-bold uppercase text-emerald-600 dark:text-emerald-400">Actual</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPendingAction({ type: 'session', session })}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 text-xs font-medium text-foreground transition-colors hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <LogOut size={12} /> Cerrar
+                      </button>
+                    )}
+                  />
+                ))
+              )}
             </div>
           </section>
 
@@ -172,14 +261,15 @@ export default function SeguridadPage() {
         description={modalDescription}
         confirmLabel="Cerrar sesión"
         variant="danger"
-        onConfirm={confirmClose}
+        loading={processing}
+        onConfirm={() => void confirmClose()}
         onClose={() => setPendingAction(null)}
       />
     </div>
   );
 }
 
-function SessionRow({ session, action }: { session: ActiveSession; action: ReactNode }) {
+function SessionRow({ session, action }: { session: SessionInfo; action: ReactNode }) {
   return (
     <article className={cn(
       'grid gap-3 px-4 py-3 transition-colors hover:bg-muted/20 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto] sm:items-center',
@@ -190,17 +280,16 @@ function SessionRow({ session, action }: { session: ActiveSession; action: React
           <SessionIcon type={session.deviceType} />
         </div>
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-foreground">{session.deviceName}</h3>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{session.browser}</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground/75">Desde {session.createdAt}</p>
+          <h3 className="truncate text-sm font-semibold text-foreground">{session.deviceName ?? 'Dispositivo desconocido'}</h3>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{session.deviceType ?? 'Dispositivo'}</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/75">Desde {formatDate(session.createdAt)}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 pl-12 text-xs sm:block sm:space-y-1 sm:pl-0">
-        <p className="flex items-center gap-1.5 text-muted-foreground"><MapPin size={10} /> {session.location}</p>
-        <p className="font-mono text-[10px] text-muted-foreground">IP {session.ip}</p>
+        <p className="font-mono text-[10px] text-muted-foreground">IP {formatIp(session.ip)}</p>
         <p className={cn('col-span-2 flex items-center gap-1.5 text-[11px] font-medium', session.actual ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground')}>
-          <Clock3 size={10} /> {session.lastUsedAt}
+          <Clock3 size={10} /> {formatDate(session.lastUsedAt)}
         </p>
       </div>
 
@@ -209,7 +298,7 @@ function SessionRow({ session, action }: { session: ActiveSession; action: React
   );
 }
 
-function SessionIcon({ type }: { type: ActiveSession['deviceType'] }) {
+function SessionIcon({ type }: { type: string | null }) {
   if (type === 'android') return <Smartphone size={17} />;
   if (type === 'ios') return <Tablet size={17} />;
   return <Laptop size={17} />;

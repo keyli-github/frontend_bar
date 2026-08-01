@@ -6,33 +6,28 @@
  * Conectado a:
  *   GET    /api/auth/perfil        (via auth-store)
  *   PATCH  /api/auth/cambiar-password
- *   GET    /api/auth/sesiones
- *   DELETE /api/auth/sesiones/:id
- *   DELETE /api/auth/sesiones
  *   PATCH  /api/usuarios/:id       (solo si el rol tiene `usuarios:editar`)
+ *
+ * La gestion de sesiones/dispositivos vive ahora en `/seguridad`.
  *
  * El backend no expone un endpoint de auto-edicion, asi que los datos
  * personales solo son editables por quien ya tiene permiso de gestion de
  * usuarios. Para el resto, la tarjeta es de solo lectura.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth-store';
 import { authApi, ApiError, clearTokens } from '@/lib/api';
 import { getRoleLabel } from '@/lib/roles';
-import type { SessionInfo } from '@/types/api';
 import {
   AtSign,
   Shield,
   Building,
   Clock,
   Camera,
-  Monitor,
-  LogOut,
 } from 'lucide-react';
-import { Bones, BoneList } from '@/components/shared/bones';
 
 const dateFmt = new Intl.DateTimeFormat('es-PE', {
   dateStyle: 'medium',
@@ -59,42 +54,6 @@ export default function PerfilPage() {
   // devolvia 403 a todo el mundo. Se muestra en solo lectura hasta que exista
   // un endpoint del tipo `PATCH /auth/perfil`.
   const fileRef = useRef<HTMLInputElement>(null);
-
-  // ── Sesiones activas ──────────────────────────────────────
-  const [sesiones, setSesiones] = useState<SessionInfo[]>([]);
-  const [loadingSesiones, setLoadingSesiones] = useState(true);
-  const [sesionesError, setSesionesError] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  // El setState vive en los callbacks de la promesa, nunca en el cuerpo del
-  // efecto (regla `react-hooks/set-state-in-effect`).
-  useEffect(() => {
-    let cancelled = false;
-    authApi
-      .getSesiones()
-      .then((data) => {
-        if (cancelled) return;
-        setSesiones(data);
-        setSesionesError(null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setSesionesError(
-          err instanceof ApiError ? err.message : 'No se pudieron cargar las sesiones.',
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSesiones(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadToken]);
-
-  const recargarSesiones = useCallback(() => {
-    setLoadingSesiones(true);
-    setReloadToken((n) => n + 1);
-  }, []);
 
   // ── Cambio de contrasena ──────────────────────────────────
   const [currentPassword, setCurrentPassword] = useState('');
@@ -130,53 +89,6 @@ export default function PerfilPage() {
         err instanceof ApiError ? err.message : 'No se pudo cambiar la contraseña.',
       );
       setChangingPass(false);
-    }
-  };
-
-  const handleCerrarSesion = async (sessionId: string) => {
-    try {
-      await authApi.cerrarSesion(sessionId);
-      recargarSesiones();
-    } catch (err) {
-      setSesionesError(
-        err instanceof ApiError ? err.message : 'No se pudo cerrar la sesión.',
-      );
-    }
-  };
-
-  const handleCerrarOtras = async () => {
-    try {
-      await authApi.cerrarOtrasSesiones();
-      toast.success('Se cerraron las demás sesiones');
-      recargarSesiones();
-    } catch (err) {
-      setSesionesError(
-        err instanceof ApiError ? err.message : 'No se pudieron cerrar las sesiones.',
-      );
-    }
-  };
-
-  /**
-   * `POST /auth/logout-all` cierra TODAS las sesiones, incluida esta, por lo
-   * que hay que limpiar los tokens locales y volver al login.
-   */
-  const handleCerrarTodas = async () => {
-    if (!confirm('Se cerrarán todas tus sesiones, incluida la actual. ¿Continuar?')) return;
-    try {
-      await authApi.logoutAll();
-      clearTokens();
-      useAuthStore.setState({
-        user: null,
-        permisos: [],
-        status: 'unauthenticated',
-        isAuthenticated: false,
-        mustChangePassword: false,
-      });
-      router.replace('/login');
-    } catch (err) {
-      setSesionesError(
-        err instanceof ApiError ? err.message : 'No se pudieron cerrar las sesiones.',
-      );
     }
   };
 
@@ -407,85 +319,6 @@ export default function PerfilPage() {
             </button>
           </div>
         </form>
-      </div>
-
-      {/* ── Sesiones activas ── */}
-      <div
-        className="surface p-5 lg:p-6 animate-fade-in-up"
-        style={{ animationDelay: '180ms' }}
-      >
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold text-foreground text-base">Sesiones activas</h2>
-          <div className="flex items-center gap-4">
-            {sesiones.length > 1 && (
-              <button
-                type="button"
-                onClick={() => void handleCerrarOtras()}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
-              >
-                Cerrar las demás
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleCerrarTodas()}
-              className="text-xs font-medium text-destructive hover:underline"
-            >
-              Cerrar todas y salir
-            </button>
-          </div>
-        </div>
-
-        {sesionesError && (
-          <p role="alert" className="text-sm text-destructive mb-3">
-            {sesionesError}
-          </p>
-        )}
-
-        <Bones
-          name="perfil-sesiones"
-          loading={loadingSesiones}
-          placeholder={<BoneList rows={3} avatar />}
-        >
-          {sesiones.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay sesiones activas.</p>
-        ) : (
-          <ul className="space-y-3">
-            {sesiones.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-start gap-3 border-b border-border py-2 text-sm last:border-0"
-              >
-                <Monitor size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-foreground">
-                    {s.deviceName ?? 'Dispositivo desconocido'}
-                    {s.actual && (
-                      <span className="ml-2 rounded border border-success/25 bg-success/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">
-                        Actual
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {s.deviceType ?? '—'} · {s.ip ?? 'IP oculta'} · Último uso:{' '}
-                    {formatDate(s.lastUsedAt)}
-                  </p>
-                </div>
-                {!s.actual && (
-                  <button
-                    type="button"
-                    onClick={() => void handleCerrarSesion(s.id)}
-                    aria-label="Cerrar esta sesión"
-                    className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <LogOut size={15} />
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        </Bones>
       </div>
     </div>
   );

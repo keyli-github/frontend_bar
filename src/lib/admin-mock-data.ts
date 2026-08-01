@@ -1,4 +1,4 @@
-import type { ActiveSession, AdminPermission, AdminRole, AuditEvent } from '@/types';
+import type { AdminPermission, AdminRole, AuditEvent } from '@/types';
 
 export const mockPermissions: AdminPermission[] = [
   { id: 'p1', nombre: 'usuarios:leer', modulo: 'usuarios', descripcion: 'Ver lista y detalle de usuarios' },
@@ -38,11 +38,4 @@ export const mockAuditEvents: AuditEvent[] = [
   { id: 'a10', accion: 'EDITAR_ROL', entidad: 'Rol', entidadId: 'r6', usuario: 'keyli', sede: 'Todas', ip: '192.168.1.24', userAgent: 'Chrome 126 / Windows', createdAt: '28 Jul 2026, 19:12', detalle: { activo: false } },
   { id: 'a11', accion: 'CUENTA_BLOQUEADA', entidad: 'Usuario', entidadId: 'u9', usuario: 'sistema', sede: 'Chapinero', ip: '10.20.1.14', userAgent: 'Chrome / Android', createdAt: '28 Jul 2026, 18:49', detalle: { intentos: 5, minutos: 15 } },
   { id: 'a12', accion: 'ELIMINAR_ESTABLECIMIENTO', entidad: 'Establecimiento', entidadId: 's5', usuario: 'keyli', sede: 'Todas', ip: '192.168.1.24', userAgent: 'Chrome 126 / Windows', createdAt: '28 Jul 2026, 15:26', detalle: { nombre: 'Sede temporal' } },
-];
-
-export const mockSessions: ActiveSession[] = [
-  { id: 'se1', deviceName: 'PC Administración', deviceType: 'web', browser: 'Chrome 126 / Windows 11', location: 'Bogotá, Colombia', ip: '192.168.1.24', lastUsedAt: 'Activa ahora', createdAt: '30 Jul 2026, 08:12', actual: true },
-  { id: 'se2', deviceName: 'MacBook personal', deviceType: 'web', browser: 'Safari 18 / macOS', location: 'Bogotá, Colombia', ip: '181.52.18.41', lastUsedAt: 'Hace 2 horas', createdAt: '28 Jul 2026, 16:45', actual: false },
-  { id: 'se3', deviceName: 'Teléfono Android', deviceType: 'android', browser: 'Chrome Mobile / Android 15', location: 'Medellín, Colombia', ip: '190.85.42.11', lastUsedAt: 'Ayer, 22:14', createdAt: '25 Jul 2026, 19:20', actual: false },
-  { id: 'se4', deviceName: 'iPad caja', deviceType: 'ios', browser: 'Safari / iPadOS', location: 'Bogotá, Colombia', ip: '10.0.0.29', lastUsedAt: 'Hace 3 días', createdAt: '21 Jul 2026, 10:08', actual: false },
 ];

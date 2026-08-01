@@ -45,18 +45,6 @@ export interface AuditEvent {
   detalle: Record<string, string | number | boolean>;
 }
 
-export interface ActiveSession {
-  id: string;
-  deviceName: string;
-  deviceType: 'web' | 'android' | 'ios';
-  browser: string;
-  location: string;
-  ip: string;
-  lastUsedAt: string;
-  createdAt: string;
-  actual: boolean;
-}
-
 // ============ Dashboard Types ============
 export interface DashboardKPI {
   label: string;
