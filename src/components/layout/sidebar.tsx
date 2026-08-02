@@ -13,7 +13,6 @@ import { NAV_MODULES as API_NAV_MODULES, NAV_ROOT } from '@/lib/navigation';
 import {
   BarChart3,
   ChevronDown,
-  ChevronRight,
   ClipboardList,
   FileText,
   Landmark,
@@ -113,7 +112,7 @@ const itemActive = 'bg-primary/12 text-primary-text';
 const itemIdle =
   'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground';
 
-/** Módulo colapsado: muestra icono del módulo, al hacer clic despliega submódulos con animación. */
+/** Módulo colapsado: muestra icono del módulo, al hover/clic despliega submódulos con animación. */
 function CollapsedModule({
   mod,
   visibleItems,
@@ -129,6 +128,15 @@ function CollapsedModule({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setOpen(true);
+  };
+  const hide = () => {
+    timeoutRef.current = setTimeout(() => setOpen(false), 150);
+  };
 
   // Cerrar al hacer clic fuera
   useEffect(() => {
@@ -141,7 +149,12 @@ function CollapsedModule({
   }, [open]);
 
   return (
-    <div ref={ref} className="relative mb-0.5">
+    <div
+      ref={ref}
+      className="relative mb-0.5"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -150,18 +163,11 @@ function CollapsedModule({
         aria-expanded={open}
         className={cn(
           itemBase,
-          'w-full justify-center px-0 relative',
+          'w-full justify-center px-0',
           isActive ? itemActive : itemIdle,
         )}
       >
         <mod.icon size={18} className="shrink-0" aria-hidden="true" />
-        <ChevronRight
-          size={10}
-          className={cn(
-            'absolute right-1 top-1/2 -translate-y-1/2 transition-transform duration-200',
-            open && 'rotate-90',
-          )}
-        />
       </button>
 
       {/* Flyout con submódulos */}
@@ -173,6 +179,8 @@ function CollapsedModule({
             ? 'scale-100 opacity-100 pointer-events-auto'
             : 'scale-95 opacity-0 pointer-events-none',
         )}
+        onMouseEnter={show}
+        onMouseLeave={hide}
       >
         <div className="px-3 py-2 border-b border-sidebar-border">
           <p className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/50">
@@ -288,7 +296,7 @@ export function Sidebar() {
         )}
       >
         {/* ── Cabecera ── */}
-        <div className="flex shrink-0 items-center gap-2.5 px-4 py-4">
+        <div className={cn("flex shrink-0 items-center gap-2.5 px-4 py-4", collapsed && "flex-col gap-2 px-2 py-3")}>
           <Image
             src="/assets/barbeer.webp"
             alt=""
@@ -329,7 +337,7 @@ export function Sidebar() {
         </div>
 
         {/* ── Navegacion ── */}
-        <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-2 py-2">
+        <nav className={cn("flex-1 space-y-0.5 overflow-x-hidden px-2 py-2", collapsed ? "overflow-y-visible" : "overflow-y-auto")}>
           {canAccess(permisos, NAV_ROOT.href) && (
             <Link
               href={NAV_ROOT.href}
