@@ -173,7 +173,7 @@ function CollapsedModule({
       {/* Flyout con submódulos */}
       <div
         className={cn(
-          'absolute left-full top-0 ml-2 z-[60] min-w-[180px] rounded-xl border border-sidebar-border bg-sidebar shadow-xl',
+          'absolute left-full top-0 ml-2 z-[9999] min-w-[180px] rounded-xl border border-sidebar-border bg-sidebar shadow-xl',
           'transition-all duration-200 origin-left',
           open
             ? 'scale-100 opacity-100 pointer-events-auto'
@@ -292,7 +292,7 @@ export function Sidebar() {
           'lg:static lg:z-auto lg:h-full lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           'w-[min(17rem,85vw)]',
-          collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
+          collapsed ? 'lg:w-[4.25rem] lg:overflow-visible' : 'lg:w-[17rem]',
         )}
       >
         {/* ── Cabecera ── */}
