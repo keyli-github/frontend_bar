@@ -14,6 +14,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Bar beer — ERP System',
   description: 'Sistema de gestión para bares y restaurantes',
+  icons: {
+    icon: '/assets/barbeer.webp',
+    shortcut: '/assets/barbeer.webp',
+    apple: '/assets/barbeer.webp',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

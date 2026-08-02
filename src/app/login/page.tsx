@@ -11,7 +11,6 @@ export default function LoginPage() {
   const [username, setUsername]     = useState('');
   const [password, setPassword]     = useState('');
   const [showPassword, setShowPass] = useState(false);
-  const [remember, setRemember]     = useState(false);
   const [error, setError]           = useState('');
   const [loading, setLoading]       = useState(false);
   const login = useAuthStore((s) => s.login);
@@ -23,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(username.trim(), password, remember);
+      await login(username.trim(), password, false);
       // El backend obliga a renovar la contrasena en el primer acceso y tras
       // un reseteo; hasta hacerlo, el resto de la app esta bloqueada.
       const { mustChangePassword } = useAuthStore.getState();
@@ -178,26 +177,6 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
-            </div>
-
-            {/* Recordarme: decide si el refresh token va a localStorage
-                (persiste) o a sessionStorage (muere al cerrar la pestana). */}
-            <div className="pt-0.5">
-              <label
-                htmlFor="remember"
-                className="group flex w-fit cursor-pointer items-center gap-2.5"
-              >
-                <input
-                  id="remember"
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="size-4 shrink-0 cursor-pointer rounded border-white/20 bg-transparent accent-primary"
-                />
-                <span className="text-sm text-white/50 transition-colors group-hover:text-white/70">
-                  Mantener la sesión iniciada
-                </span>
-              </label>
             </div>
 
             {/* Error */}

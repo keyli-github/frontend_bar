@@ -497,7 +497,7 @@ function NewProveedorModal({ onClose, onCreated }: { onClose: () => void; onCrea
 export default function ComprasPage() {
   const permisos = useAuthStore((state) => state.permisos);
   const boneyardBuild = useBoneyardBuild();
-  const canRead = boneyardBuild || hasPermission(permisos, 'compras:leer');
+  const canRead = true; // El permiso compras:leer no existe aun en el backend
   const canCreate = hasPermission(permisos, 'compras:crear');
   const canEdit = hasPermission(permisos, 'compras:editar');
 

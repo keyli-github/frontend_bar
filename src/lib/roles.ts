@@ -112,7 +112,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   '/inventario': null,
   '/kardex': null,
   '/compras': null,
-  '/asistencia': 'asistencia:leer',
+  '/asistencia': null,
   '/usuarios': 'usuarios:leer',
   '/sucursales': 'establecimientos:leer',
   '/roles': 'roles:leer',

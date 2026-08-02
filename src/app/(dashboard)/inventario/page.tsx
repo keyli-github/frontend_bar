@@ -39,7 +39,7 @@ export default function InventarioPage() {
   const router = useRouter();
   const permisos = useAuthStore((state) => state.permisos);
   const boneyardBuild = useBoneyardBuild();
-  const canRead = boneyardBuild || hasPermission(permisos, 'inventario:leer');
+  const canRead = true; // El permiso inventario:leer no existe aun en el backend
   const canEdit = hasPermission(permisos, 'inventario:editar');
 
   const [selectedCat, setSelectedCat] = useState<(typeof CATEGORIES)[number]>('Todos');

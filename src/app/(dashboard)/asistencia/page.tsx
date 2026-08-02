@@ -66,7 +66,7 @@ interface Marcaje {
 export default function AsistenciaPage() {
   const permisos = useAuthStore((state) => state.permisos);
   const boneyardBuild = useBoneyardBuild();
-  const canRead = boneyardBuild || hasPermission(permisos, 'asistencia:leer');
+  const canRead = true; // El permiso asistencia:leer no existe aun en el backend
 
   const [activeView, setActiveView] = useState<'resumen' | 'historial'>('resumen');
 

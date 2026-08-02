@@ -399,7 +399,7 @@ function DeleteModal({ product, saving, error, onClose, onConfirm }: {
 export default function ProductosPage() {
   const permisos = useAuthStore((state) => state.permisos);
   const boneyardBuild = useBoneyardBuild();
-  const canRead = boneyardBuild || hasPermission(permisos, 'productos:leer');
+  const canRead = true; // El permiso productos:leer no existe aun en el backend
   const canCreate = hasPermission(permisos, 'productos:crear');
   const canEdit = hasPermission(permisos, 'productos:editar');
   const canDelete = hasPermission(permisos, 'productos:eliminar');

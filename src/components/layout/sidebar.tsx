@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -112,109 +112,6 @@ const itemActive = 'bg-primary/12 text-primary-text';
 const itemIdle =
   'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground';
 
-/** Módulo colapsado: muestra icono del módulo, al hover/clic despliega submódulos con animación. */
-function CollapsedModule({
-  mod,
-  visibleItems,
-  isActive,
-  pathname,
-  closeOnMobile,
-}: {
-  mod: SidebarNavModule;
-  visibleItems: SidebarNavItem[];
-  isActive: boolean;
-  pathname: string;
-  closeOnMobile: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const show = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setOpen(true);
-  };
-  const hide = () => {
-    timeoutRef.current = setTimeout(() => setOpen(false), 150);
-  };
-
-  // Cerrar al hacer clic fuera
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
-  }, [open]);
-
-  return (
-    <div
-      ref={ref}
-      className="relative mb-0.5"
-      onMouseEnter={show}
-      onMouseLeave={hide}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title={mod.label}
-        aria-label={mod.label}
-        aria-expanded={open}
-        className={cn(
-          itemBase,
-          'w-full justify-center px-0',
-          isActive ? itemActive : itemIdle,
-        )}
-      >
-        <mod.icon size={18} className="shrink-0" aria-hidden="true" />
-      </button>
-
-      {/* Flyout con submódulos */}
-      <div
-        className={cn(
-          'absolute left-full top-0 ml-2 z-[9999] min-w-[180px] rounded-xl border border-sidebar-border bg-sidebar shadow-xl',
-          'transition-all duration-200 origin-left',
-          open
-            ? 'scale-100 opacity-100 pointer-events-auto'
-            : 'scale-95 opacity-0 pointer-events-none',
-        )}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-      >
-        <div className="px-3 py-2 border-b border-sidebar-border">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/50">
-            {mod.label}
-          </p>
-        </div>
-        <ul className="p-1.5 space-y-0.5">
-          {visibleItems.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={() => { setOpen(false); closeOnMobile(); }}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-primary/12 text-primary-text'
-                      : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                  )}
-                >
-                  <item.icon size={15} className="shrink-0" aria-hidden="true" />
-                  <span>{item.name}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleCollapsed } = useUIStore();
@@ -292,7 +189,7 @@ export function Sidebar() {
           'lg:static lg:z-auto lg:h-full lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           'w-[min(17rem,85vw)]',
-          collapsed ? 'lg:w-[4.25rem] lg:overflow-visible' : 'lg:w-[17rem]',
+          collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
         )}
       >
         {/* ── Cabecera ── */}
@@ -337,7 +234,7 @@ export function Sidebar() {
         </div>
 
         {/* ── Navegacion ── */}
-        <nav className={cn("flex-1 space-y-0.5 overflow-x-hidden px-2 py-2", collapsed ? "overflow-y-visible" : "overflow-y-auto")}>
+        <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-2 py-2">
           {canAccess(permisos, NAV_ROOT.href) && (
             <Link
               href={NAV_ROOT.href}
@@ -371,14 +268,24 @@ export function Sidebar() {
 
             if (collapsed) {
               return (
-                <CollapsedModule
-                  key={mod.id}
-                  mod={mod}
-                  visibleItems={visibleItems}
-                  isActive={isActive}
-                  pathname={pathname}
-                  closeOnMobile={closeOnMobile}
-                />
+                <div key={mod.id} className="mb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleCollapsed();
+                      toggleModule(mod.id, true);
+                    }}
+                    title={mod.label}
+                    aria-label={mod.label}
+                    className={cn(
+                      itemBase,
+                      'w-full justify-center px-0',
+                      isActive ? itemActive : itemIdle,
+                    )}
+                  >
+                    <mod.icon size={18} className="shrink-0" aria-hidden="true" />
+                  </button>
+                </div>
               );
             }
 

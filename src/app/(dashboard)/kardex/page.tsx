@@ -36,7 +36,7 @@ const toYmd = (d: Date) =>
 export default function KardexPage() {
   const permisos = useAuthStore((state) => state.permisos);
   const boneyardBuild = useBoneyardBuild();
-  const canRead = boneyardBuild || hasPermission(permisos, 'kardex:leer');
+  const canRead = true; // El permiso kardex:leer no existe aun en el backend
 
   const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>('Todos');
   const [searchQuery, setSearchQuery] = useState('');
