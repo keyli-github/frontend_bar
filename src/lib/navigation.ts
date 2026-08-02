@@ -17,6 +17,7 @@ import {
   ScrollText,
   Settings,
   User,
+  Tags,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -57,7 +58,10 @@ export const NAV_MODULES: NavModule[] = [
 ];
 
 /** Rutas accesibles que no aparecen en el sidebar. */
-const NAV_HIDDEN: NavItem[] = [{ name: 'Perfil', href: '/perfil', icon: User }];
+const NAV_HIDDEN: NavItem[] = [
+  { name: 'Perfil', href: '/perfil', icon: User },
+  { name: 'Categorías', href: '/categorias', icon: Tags },
+];
 
 /** Indice plano href → NavItem. Se construye una sola vez al importar. */
 const ROUTE_INDEX = new Map<string, NavItem>(

@@ -14,12 +14,12 @@
 // ============================================================
 
 export const USER_ROLES = [
-  'SUPERADMIN',
-  'ADMIN',
-  'CAJERO',
-  'MOZO',
-  'COCINA',
-  'BARTENDER',
+  "SUPERADMIN",
+  "ADMIN",
+  "CAJERO",
+  "MOZO",
+  "COCINA",
+  "BARTENDER",
 ] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
@@ -29,12 +29,12 @@ export function isUserRole(value: string): value is UserRole {
 }
 
 export const roleLabel: Record<UserRole, string> = {
-  SUPERADMIN: 'Super Admin',
-  ADMIN: 'Administrador',
-  CAJERO: 'Cajero',
-  MOZO: 'Mozo',
-  COCINA: 'Cocina',
-  BARTENDER: 'Bartender',
+  SUPERADMIN: "Super Admin",
+  ADMIN: "Administrador",
+  CAJERO: "Cajero",
+  MOZO: "Mozo",
+  COCINA: "Cocina",
+  BARTENDER: "Bartender",
 };
 
 /** Etiqueta legible para roles base y roles personalizados. */
@@ -42,22 +42,22 @@ export const getRoleLabel = (role: string): string =>
   isUserRole(role) ? roleLabel[role] : role;
 
 export const roleBadgeClass: Record<UserRole, string> = {
-  SUPERADMIN: 'bg-special/10 border-special/25 text-special',
-  ADMIN: 'bg-primary/10 border-primary/25 text-primary-text',
-  CAJERO: 'bg-success/10 border-success/25 text-success',
-  MOZO: 'bg-success/10 border-success/25 text-success',
-  COCINA: 'bg-warning/10 border-warning/25 text-warning',
-  BARTENDER: 'bg-warning/10 border-warning/25 text-warning',
+  SUPERADMIN: "bg-special/10 border-special/25 text-special",
+  ADMIN: "bg-primary/10 border-primary/25 text-primary-text",
+  CAJERO: "bg-success/10 border-success/25 text-success",
+  MOZO: "bg-success/10 border-success/25 text-success",
+  COCINA: "bg-warning/10 border-warning/25 text-warning",
+  BARTENDER: "bg-warning/10 border-warning/25 text-warning",
 };
 
 /** Color del avatar por rol, usado en tablas y cabeceras. */
 export const roleAvatarClass: Record<UserRole, string> = {
-  SUPERADMIN: 'bg-special',
-  ADMIN: 'bg-primary',
-  CAJERO: 'bg-success',
-  MOZO: 'bg-success',
-  COCINA: 'bg-warning',
-  BARTENDER: 'bg-warning',
+  SUPERADMIN: "bg-special",
+  ADMIN: "bg-primary",
+  CAJERO: "bg-success",
+  MOZO: "bg-success",
+  COCINA: "bg-warning",
+  BARTENDER: "bg-warning",
 };
 
 // ============================================================
@@ -96,28 +96,26 @@ export function hasAnyPermission(
  * `null` = ruta abierta a cualquier usuario autenticado.
  *
  * Las pantallas respaldadas por API usan exactamente el permiso sembrado por
- * el backend. Las pantallas solo visuales usan `null`, pero siguen exigiendo
- * una sesion valida porque viven dentro del layout protegido.
+ * el backend. La autorizacion definitiva siempre vuelve a ejecutarse en NestJS.
  */
 export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
-  '/dashboard': null,
-  '/perfil': null,
+  "/dashboard": null,
+  "/perfil": null,
   // Respaldada por `GET/DELETE /auth/sesiones`: solo exige sesion valida,
   // no un permiso concreto (igual que /perfil).
-  '/seguridad': null,
-  // Modulos visuales aun sin API: disponibles para cualquier sesion valida.
-  '/ventas': null,
-  '/caja': null,
-  '/productos': null,
-  '/inventario': null,
-  '/kardex': null,
-  '/compras': null,
-  '/asistencia': null,
-  '/usuarios': 'usuarios:leer',
-  '/sucursales': 'establecimientos:leer',
-  '/roles': 'roles:leer',
-  '/permisos': 'permisos:leer',
-  '/auditoria': 'audit:leer',
+  "/seguridad": null,
+  "/caja": "caja:leer",
+  "/categorias": "categorias:leer",
+  "/productos": "productos:leer",
+  "/inventario": "inventario:leer",
+  "/kardex": "kardex:leer",
+  "/compras": "compras:leer",
+  "/asistencia": "asistencia:leer",
+  "/usuarios": "usuarios:leer",
+  "/sucursales": "establecimientos:leer",
+  "/roles": "roles:leer",
+  "/permisos": "permisos:leer",
+  "/auditoria": "audit:leer",
 };
 
 /** ¿Puede el usuario ver esta ruta en la navegacion y entrar en ella? */
@@ -136,13 +134,13 @@ export function canAccess(
 // ACCIONES CRUD
 // ============================================================
 
-export type CrudAction = 'create' | 'edit' | 'delete';
+export type CrudAction = "create" | "edit" | "delete";
 
 /** Traduccion de la accion de UI al verbo que usa el backend. */
 const ACTION_VERB: Record<CrudAction, string> = {
-  create: 'crear',
-  edit: 'editar',
-  delete: 'eliminar',
+  create: "crear",
+  edit: "editar",
+  delete: "eliminar",
 };
 
 /**
@@ -155,16 +153,16 @@ const ACTION_VERB: Record<CrudAction, string> = {
  * contrario devolveria `false` incluso para un SUPERADMIN.
  */
 const MODULE_SCOPE = {
-  usuarios: 'usuarios',
-  roles: 'roles',
-  permisos: 'permisos',
-  sucursales: 'establecimientos',
-  asistencia: 'asistencia',
+  usuarios: "usuarios",
+  roles: "roles",
+  permisos: "permisos",
+  sucursales: "establecimientos",
+  asistencia: "asistencia",
 } as const;
 
 /** Permisos que el backend no define y hay que remapear al que si existe. */
 const PERMISSION_ALIASES: Record<string, Permission> = {
-  'establecimientos:eliminar': 'establecimientos:editar',
+  "establecimientos:eliminar": "establecimientos:editar",
 };
 
 export type UiModule = keyof typeof MODULE_SCOPE;

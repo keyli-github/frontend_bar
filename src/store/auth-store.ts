@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Estado de sesion, conectado a `POST /api/auth/*` del backend NestJS.
@@ -10,19 +10,19 @@
  *     reconstruye en cada arranque con `bootstrap()`, canjeando el refresh
  *     token por un access token nuevo.
  */
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { authApi, ApiError, forceRefresh, isSessionDead } from '@/lib/api';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { authApi, ApiError, forceRefresh, isSessionDead } from "@/lib/api";
 import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
   onSessionEnded,
   setTokens,
-} from '@/lib/api/token-store';
-import { decodeJwt } from '@/lib/api/jwt';
-import type { Permission } from '@/lib/roles';
-import type { Perfil } from '@/types/api';
+} from "@/lib/api/token-store";
+import { decodeJwt } from "@/lib/api/jwt";
+import type { Permission } from "@/lib/roles";
+import type { Perfil } from "@/types/api";
 
 // ============================================================
 // MODELO
@@ -45,11 +45,11 @@ export interface SessionUser {
 
 export type AuthStatus =
   /** Aun no se ha intentado restaurar la sesion. */
-  | 'idle'
+  | "idle"
   /** `bootstrap()` o `login()` en curso. */
-  | 'loading'
-  | 'authenticated'
-  | 'unauthenticated';
+  | "loading"
+  | "authenticated"
+  | "unauthenticated";
 
 interface AuthState {
   user: SessionUser | null;
@@ -72,7 +72,11 @@ interface AuthState {
    * @param remember `true` persiste la sesion entre reinicios del navegador;
    *   `false` la limita a la pestana actual.
    */
-  login: (username: string, password: string, remember: boolean) => Promise<void>;
+  login: (
+    username: string,
+    password: string,
+    remember: boolean,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   /** Restaura la sesion al cargar la app. Idempotente. */
   bootstrap: () => Promise<void>;
@@ -84,7 +88,7 @@ interface AuthState {
 // ============================================================
 
 function initialsOf(username: string): string {
-  return username.trim().slice(0, 2).toUpperCase() || '?';
+  return username.trim().slice(0, 2).toUpperCase() || "?";
 }
 
 function toSessionUser(perfil: Perfil): SessionUser {
@@ -116,36 +120,11 @@ function readTokenClaims(): {
 const LOGGED_OUT = {
   user: null,
   permisos: [] as Permission[],
-  status: 'unauthenticated' as AuthStatus,
+  status: "unauthenticated" as AuthStatus,
   isAuthenticated: false,
   mustChangePassword: false,
   bootstrapError: null as string | null,
 };
-
-// ── DEMO: credenciales locales cuando el backend no está disponible ──
-const ALL_PERMISOS: Permission[] = [
-  'usuarios:leer', 'usuarios:crear', 'usuarios:editar', 'usuarios:eliminar',
-  'usuarios:resetear-password', 'roles:leer', 'permisos:leer', 'audit:leer',
-  'establecimientos:leer', 'establecimientos:crear', 'establecimientos:editar',
-];
-
-const DEMO_USERS = [
-  {
-    username: 'keyli', email: 'keyli@barbeer.com', password: 'keyli123',
-    session: { id: '1', username: 'keyli', initials: 'KE', rol: 'SUPERADMIN', nivel: 100, sedeId: null, sede: null, createdAt: '2024-03-01' } as SessionUser,
-    permisos: ALL_PERMISOS,
-  },
-  {
-    username: 'charly', email: 'charly@barbeer.com', password: 'charly123',
-    session: { id: '2', username: 'charly', initials: 'CH', rol: 'ADMIN', nivel: 50, sedeId: 's1', sede: 'Zona Rosa', createdAt: '2024-06-15' } as SessionUser,
-    permisos: ['usuarios:leer', 'usuarios:crear', 'usuarios:editar', 'usuarios:eliminar', 'usuarios:resetear-password', 'roles:leer', 'permisos:leer', 'audit:leer', 'establecimientos:leer'] as Permission[],
-  },
-  {
-    username: 'frank', email: 'frank@barbeer.com', password: 'frank123',
-    session: { id: '5', username: 'frank', initials: 'FR', rol: 'CAJERO', nivel: 10, sedeId: 's1', sede: 'Zona Rosa', createdAt: '2025-01-10' } as SessionUser,
-    permisos: [] as Permission[],
-  },
-];
 
 // ============================================================
 // STORE
@@ -156,14 +135,14 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       permisos: [],
-      status: 'idle',
+      status: "idle",
       isAuthenticated: false,
       mustChangePassword: false,
       bootstrapError: null,
       profileImage: null,
 
       login: async (username, password, remember) => {
-        set({ status: 'loading', bootstrapError: null });
+        set({ status: "loading", bootstrapError: null });
         try {
           const tokens = await authApi.login({ username, password });
           setTokens(tokens, remember);
@@ -176,7 +155,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               permisos: claims.permisos,
-              status: 'authenticated',
+              status: "authenticated",
               isAuthenticated: true,
               mustChangePassword: true,
             });
@@ -187,28 +166,11 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: toSessionUser(perfil),
             permisos: claims.permisos,
-            status: 'authenticated',
+            status: "authenticated",
             isAuthenticated: true,
             mustChangePassword: false,
           });
         } catch (error) {
-          // ── MODO DEMO: si el backend no está disponible, usar credenciales locales ──
-          const isNetworkError = error instanceof ApiError && error.status === 0;
-          if (isNetworkError) {
-            const demoUser = DEMO_USERS.find(
-              (u) => (u.username === username.toLowerCase() || u.email === username.toLowerCase()) && u.password === password,
-            );
-            if (demoUser) {
-              set({
-                user: demoUser.session,
-                permisos: demoUser.permisos,
-                status: 'authenticated',
-                isAuthenticated: true,
-                mustChangePassword: false,
-              });
-              return;
-            }
-          }
           clearTokens();
           set(LOGGED_OUT);
           throw error;
@@ -224,7 +186,7 @@ export const useAuthStore = create<AuthState>()(
 
       bootstrap: async () => {
         // Evita relanzarlo si ya hay una restauracion en curso o resuelta.
-        if (get().status !== 'idle') return;
+        if (get().status !== "idle") return;
 
         // Si ya está autenticado en modo demo, no intentar refresh.
         if (get().isAuthenticated && get().user) return;
@@ -234,7 +196,7 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        set({ status: 'loading' });
+        set({ status: "loading" });
         try {
           await forceRefresh();
           const claims = readTokenClaims();
@@ -243,7 +205,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               permisos: claims.permisos,
-              status: 'authenticated',
+              status: "authenticated",
               isAuthenticated: true,
               mustChangePassword: true,
             });
@@ -254,7 +216,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: toSessionUser(perfil),
             permisos: claims.permisos,
-            status: 'authenticated',
+            status: "authenticated",
             isAuthenticated: true,
             mustChangePassword: false,
           });
@@ -272,7 +234,7 @@ export const useAuthStore = create<AuthState>()(
             bootstrapError:
               error instanceof ApiError
                 ? error.message
-                : 'No se pudo contactar con el servidor.',
+                : "No se pudo contactar con el servidor.",
           });
         }
       },
@@ -280,7 +242,7 @@ export const useAuthStore = create<AuthState>()(
       setProfileImage: (img) => set({ profileImage: img }),
     }),
     {
-      name: 'barbeer-auth',
+      name: "barbeer-auth",
       /**
        * v1 (mock) guardaba `{ user, isAuthenticated: true }` en esta misma
        * clave. Al rehidratar, zustand fusiona TODO lo que encuentre en

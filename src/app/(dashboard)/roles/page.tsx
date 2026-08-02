@@ -460,7 +460,7 @@ export default function RolesPage() {
         description={(
           <span>
             El rol <strong className="text-foreground">{deleteRole?.nombre}</strong> se eliminará del sistema.
-            {Boolean(deleteRole?._count.usuarios) && ' Revisa primero los usuarios que todavía lo tienen asignado.'}
+            {Boolean(deleteRole?._count?.usuarios) && ' Revisa primero los usuarios que todavía lo tienen asignado.'}
           </span>
         )}
         confirmLabel={deleting ? 'Eliminando...' : 'Eliminar rol'}

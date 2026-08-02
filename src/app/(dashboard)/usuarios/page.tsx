@@ -612,11 +612,13 @@ function UsuarioFormModal({
   const isCreate = mode === 'create';
   const [username, setUsername] = useState(usuario?.username ?? '');
   const [password, setPassword] = useState('');
-  const [rolId, setRolId] = useState(usuario?.rol.id ?? '');
+  const [rolId, setRolId] = useState(usuario?.rol?.id ?? '');
   const [sedeId, setSedeId] = useState(usuario?.sede?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const currentRoleMissing = Boolean(usuario && !roles.some((rol) => rol.id === usuario.rol.id));
+  const currentRoleMissing = Boolean(
+    usuario?.rol && !roles.some((rol) => rol.id === usuario.rol.id),
+  );
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

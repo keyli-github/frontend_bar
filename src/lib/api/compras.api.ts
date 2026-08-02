@@ -16,6 +16,7 @@ import type {
   CambiarEstadoCompraPayload,
   Compra,
   CompraQuery,
+  ComprasResumen,
   CreateCompraPayload,
   CreateProveedorPayload,
   Paginated,
@@ -37,6 +38,16 @@ export async function listCompras(
       pagina: query.pagina ?? 1,
       limite: query.limite ?? 25,
     },
+  });
+  return data;
+}
+
+/** `GET /compras/resumen` — KPIs de órdenes con el mismo alcance por sede. */
+export async function getComprasResumen(
+  query: Pick<CompraQuery, 'estado' | 'proveedorId' | 'sedeId'> = {},
+): Promise<ComprasResumen> {
+  const { data } = await api.get<ComprasResumen>('/compras/resumen', {
+    params: query,
   });
   return data;
 }

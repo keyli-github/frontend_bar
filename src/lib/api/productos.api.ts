@@ -14,6 +14,7 @@ import type {
   Paginated,
   Producto,
   ProductoQuery,
+  ProductoResumen,
   UpdateProductoPayload,
 } from '@/types/api';
 
@@ -28,6 +29,12 @@ export async function listProductos(
       limite: query.limite ?? 25,
     },
   });
+  return data;
+}
+
+/** `GET /productos/resumen` — KPIs globales del catálogo. */
+export async function getProductosResumen(): Promise<ProductoResumen> {
+  const { data } = await api.get<ProductoResumen>('/productos/resumen');
   return data;
 }
 

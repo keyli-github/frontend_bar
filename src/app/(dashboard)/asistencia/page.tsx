@@ -38,7 +38,7 @@ const recordTypeStyle: Record<string, string> = {
   SALIDA: 'text-red-400',
 };
 
-const timeFormatter = new Intl.DateTimeFormat('es-CO', {
+const timeFormatter = new Intl.DateTimeFormat('es-PE', {
   hour: '2-digit',
   minute: '2-digit',
 });
@@ -66,7 +66,8 @@ interface Marcaje {
 export default function AsistenciaPage() {
   const permisos = useAuthStore((state) => state.permisos);
   const boneyardBuild = useBoneyardBuild();
-  const canRead = true; // El permiso asistencia:leer no existe aun en el backend
+  const canRead =
+    boneyardBuild || hasPermission(permisos, 'asistencia:leer');
 
   const [activeView, setActiveView] = useState<'resumen' | 'historial'>('resumen');
 
@@ -161,7 +162,7 @@ export default function AsistenciaPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Asistencia</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
           <div className="flex gap-2">

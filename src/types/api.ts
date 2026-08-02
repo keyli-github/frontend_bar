@@ -346,14 +346,32 @@ export interface UpdateAsistenciaPayload {
 // PRODUCTOS (catalogo global)
 // ============================================================
 
-/** Categorias del catalogo (backend `PRODUCTO_CATEGORIAS`). */
-export type ProductoCategoria =
-  | 'Cocteles'
-  | 'Cervezas'
-  | 'Destilados'
-  | 'Vinos'
-  | 'Snacks'
-  | 'Otro';
+export interface Categoria {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  activo: boolean;
+  productosCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoriaQuery extends PaginationQuery {
+  q?: string;
+  activo?: 'true' | 'false';
+}
+
+export interface CreateCategoriaPayload {
+  nombre: string;
+  descripcion?: string;
+  activo?: boolean;
+}
+
+export interface UpdateCategoriaPayload {
+  nombre?: string;
+  descripcion?: string;
+  activo?: boolean;
+}
 
 /**
  * Item de `GET /productos` (ProductosService.toDto). `margin` es el margen
@@ -364,6 +382,7 @@ export interface Producto {
   codigo: string;
   nombre: string;
   descripcion: string | null;
+  categoriaId: string;
   categoria: string;
   unidad: string;
   precioVenta: number;
@@ -376,10 +395,19 @@ export interface Producto {
   margin: number;
 }
 
+/** `GET /productos/resumen` — KPIs globales del catálogo. */
+export interface ProductoResumen {
+  total: number;
+  activos: number;
+  enPos: number;
+  valorCatalogo: number;
+  margenPromedio: number;
+}
+
 /** `ProductoQueryDto`. `activo` viaja como 'true' | 'false'. */
 export interface ProductoQuery extends PaginationQuery {
   q?: string;
-  categoria?: ProductoCategoria;
+  categoriaId?: string;
   activo?: 'true' | 'false';
 }
 
@@ -388,7 +416,7 @@ export interface CreateProductoPayload {
   codigo: string;
   nombre: string;
   descripcion?: string;
-  categoria: ProductoCategoria;
+  categoriaId: string;
   unidad?: string;
   precioVenta: number;
   precioCosto: number;
@@ -400,7 +428,7 @@ export interface CreateProductoPayload {
 export interface UpdateProductoPayload {
   nombre?: string;
   descripcion?: string;
-  categoria?: ProductoCategoria;
+  categoriaId?: string;
   unidad?: string;
   precioVenta?: number;
   precioCosto?: number;
@@ -439,7 +467,7 @@ export interface InventarioItem {
 /** `InventarioQueryDto`. `estado` se filtra en memoria sobre la pagina. */
 export interface InventarioQuery extends PaginationQuery {
   q?: string;
-  categoria?: ProductoCategoria;
+  categoriaId?: string;
   estado?: InventarioEstado;
   sedeId?: string;
 }
@@ -500,6 +528,14 @@ export interface KardexQuery extends PaginationQuery {
   sedeId?: string;
 }
 
+/** `GET /kardex/resumen` — KPIs de los movimientos filtrados. */
+export interface KardexResumen {
+  totalMovimientos: number;
+  entradas: number;
+  salidas: number;
+  valorTotal: number;
+}
+
 // ============================================================
 // COMPRAS (ordenes de compra + proveedores)
 // ============================================================
@@ -544,6 +580,14 @@ export interface CompraQuery extends PaginationQuery {
   estado?: CompraEstado;
   proveedorId?: string;
   sedeId?: string;
+}
+
+/** `GET /compras/resumen` — KPIs de órdenes de la sede. */
+export interface ComprasResumen {
+  totalOrdenes: number;
+  pendientes: number;
+  recibidas: number;
+  montoPendiente: number;
 }
 
 /** Linea al crear una orden (`CompraItemDto`). */

@@ -16,6 +16,7 @@ export * as establecimientosApi from './establecimientos.api';
 export * as asistenciaApi from './asistencia.api';
 export * as auditApi from './audit.api';
 export * as productosApi from './productos.api';
+export * as categoriasApi from './categorias.api';
 export * as inventarioApi from './inventario.api';
 export * as kardexApi from './kardex.api';
 export * as comprasApi from './compras.api';

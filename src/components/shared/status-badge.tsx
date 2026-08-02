@@ -4,21 +4,6 @@
  */
 import { cn } from '@/lib/utils';
 
-type StatusType =
-  | 'ok' | 'active' | 'activo'
-  | 'warning' | 'alerta'
-  | 'danger'  | 'critico' | 'ausente'
-  | 'info'    | 'enviada'
-  | 'success' | 'recibida' | 'presente'
-  | 'neutral' | 'cancelada' | 'inactivo' | 'dia-libre'
-  | 'pending' | 'pendiente'
-  | 'entry'   | 'entrada'
-  | 'exit'    | 'salida'
-  | 'adjust'  | 'ajuste'
-  | 'transfer'| 'traslado'
-  | 'purple'  | 'superadmin'
-  | 'tardanza';
-
 const STYLES: Record<string, string> = {
   ok:         'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400',
   active:     'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400',

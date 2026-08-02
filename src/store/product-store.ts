@@ -21,7 +21,7 @@ const calcMargin = (sale: number, cost: number) =>
 
 export const useProductStore = create<ProductStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       products: mockProducts,
 
       addProduct: (input) => {
