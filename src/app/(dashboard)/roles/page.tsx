@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyRound, Lock, Pencil, Plus, Shield, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { Bones, BoneTable } from '@/components/shared/bones';
+import { Bones, BoneKpis, BoneTable } from '@/components/shared/bones';
 import { ConfirmModal } from '@/components/shared/confirm-modal';
 import { ModalShell } from '@/components/shared/modal-shell';
 import { PageHeader } from '@/components/shared/page-header';
@@ -69,7 +69,7 @@ export default function RolesPage() {
   const canRead = boneyardBuild || hasPermission(permisos, 'roles:leer');
 
   const [roles, setRoles] = useState<Rol[]>([]);
-  const [catalog, setCatalog] = useState<PermisosAgrupados>({});
+  const [catalog, setCatalog] = useState<PermisosAgrupados | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -133,7 +133,7 @@ export default function RolesPage() {
   }, []);
 
   const catalogSize = useMemo(
-    () => Object.values(catalog).reduce((sum, permissions) => sum + permissions.length, 0),
+    () => catalog ? Object.values(catalog).reduce((sum, permissions) => sum + permissions.length, 0) : 0,
     [catalog],
   );
   const activeRoles = roles.filter((role) => role.activo).length;
@@ -180,7 +180,7 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
 <main className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
         <PageHeader
           title="Roles y acceso"
@@ -196,6 +196,11 @@ export default function RolesPage() {
           ) : undefined}
         />
 
+        <Bones
+          name="roles-kpis"
+          loading={loading || catalog === null}
+          placeholder={<BoneKpis count={4} />}
+        >
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="ROLES ACTIVOS"
@@ -225,6 +230,7 @@ export default function RolesPage() {
             valueColor="text-amber-600 dark:text-amber-400"
           />
         </div>
+        </Bones>
 
         {!isSuperadmin && (
           <p className="rounded-xl border border-border bg-muted/40 px-4 py-2.5 text-xs text-muted-foreground">
@@ -262,7 +268,7 @@ export default function RolesPage() {
 
         <Bones
           name="roles-listado"
-          loading={loading}
+          loading={loading || catalog === null}
           placeholder={<BoneTable rows={7} cols={6} />}
         >
           {filteredRoles.length === 0 ? (
@@ -445,7 +451,7 @@ export default function RolesPage() {
       {permissionRole && (
         <PermissionAssignmentModal
           role={permissionRole}
-          catalog={catalog}
+          catalog={catalog ?? {}}
           onClose={() => setPermissionRole(null)}
           onDone={() => {
             setPermissionRole(null);

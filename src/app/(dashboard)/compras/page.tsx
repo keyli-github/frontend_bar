@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
 import { Pagination } from "@/components/shared/pagination";
-import { Bones, BoneTable, BoneCards } from "@/components/shared/bones";
+import { Bones, BoneTable, BoneCards, BoneKpis } from "@/components/shared/bones";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
 import { useAuthStore } from "@/store/auth-store";
@@ -853,6 +853,7 @@ export default function ComprasPage() {
     montoPendiente: 0,
   });
   const [resumenError, setResumenError] = useState<string | null>(null);
+  const [resumenLoading, setResumenLoading] = useState(true);
 
   // Proveedores
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -893,6 +894,9 @@ export default function ComprasPage() {
             errorMessage(err, "No se pudo cargar el resumen de compras."),
           );
         }
+      })
+      .finally(() => {
+        if (!cancelled) setResumenLoading(false);
       });
     return () => {
       cancelled = true;
@@ -973,13 +977,21 @@ export default function ComprasPage() {
   }, []);
 
   const filtrarOrdenes = useCallback((estado: "Todas" | CompraEstado) => {
+    if (estado === statusFilter) {
+      if (oPagina === 1) return;
+      setOLoading(true);
+      setOPagina(1);
+      return;
+    }
     setOLoading(true);
+    setResumenLoading(true);
     setStatusFilter(estado);
     setOPagina(1);
-  }, []);
+  }, [oPagina, statusFilter]);
 
   const recargarOrdenes = useCallback(() => {
     setOLoading(true);
+    setResumenLoading(true);
     setOReload((k) => k + 1);
   }, []);
 
@@ -1028,7 +1040,7 @@ export default function ComprasPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-full"
       style={{ backgroundColor: "var(--background)" }}
     >
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
@@ -1061,6 +1073,7 @@ export default function ComprasPage() {
         </div>
 
         {/* KPIs */}
+        <Bones name="compras-kpis" loading={resumenLoading} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
             {
@@ -1102,6 +1115,7 @@ export default function ComprasPage() {
             </div>
           ))}
         </div>
+        </Bones>
         {resumenError && (
           <p
             role="alert"

@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   User,
 } from 'lucide-react';
-import { Bones, BoneTable } from '@/components/shared/bones';
+import { Bone, Bones, BoneKpis, BoneTable } from '@/components/shared/bones';
 import { DatePicker } from '@/components/shared/date-picker';
 import { ModalShell } from '@/components/shared/modal-shell';
 import { PageHeader } from '@/components/shared/page-header';
@@ -192,7 +192,7 @@ export default function AuditoriaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
 <main className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
         <PageHeader
           title="Registro de auditoría"
@@ -205,6 +205,7 @@ export default function AuditoriaPage() {
           )}
         />
 
+        <Bones name="auditoria-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="Eventos registrados"
@@ -234,6 +235,7 @@ export default function AuditoriaPage() {
             valueColor="text-red-600 dark:text-red-400"
           />
         </section>
+        </Bones>
 
         <section className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
@@ -306,7 +308,7 @@ export default function AuditoriaPage() {
             <div>
               <h2 className="text-sm font-semibold text-foreground">Historial de actividad</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {total} {total === 1 ? 'evento coincide' : 'eventos coinciden'} con la consulta
+                {loading ? <Bone className="h-3 w-52" /> : <>{total} {total === 1 ? 'evento coincide' : 'eventos coinciden'} con la consulta</>}
               </p>
             </div>
             <div className="mt-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground sm:mt-0">

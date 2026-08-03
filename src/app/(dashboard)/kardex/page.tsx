@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Pagination } from "@/components/shared/pagination";
-import { Bones, BoneTable } from "@/components/shared/bones";
+import { Bones, BoneKpis, BoneTable } from "@/components/shared/bones";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DatePicker } from "@/components/shared/date-picker";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
@@ -139,7 +139,7 @@ export default function KardexPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-full"
       style={{ backgroundColor: "var(--background)" }}
     >
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
@@ -165,6 +165,7 @@ export default function KardexPage() {
         )}
 
         {/* KPIs */}
+        <Bones name="kardex-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
             {
@@ -206,6 +207,7 @@ export default function KardexPage() {
             </div>
           ))}
         </div>
+        </Bones>
 
         {/* Filters bar */}
         <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up">

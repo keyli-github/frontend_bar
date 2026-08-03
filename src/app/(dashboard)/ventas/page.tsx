@@ -17,7 +17,7 @@ import {
  */
 export default function VentasPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <div className="border-b border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-6xl items-start gap-3">
           <AlertTriangle

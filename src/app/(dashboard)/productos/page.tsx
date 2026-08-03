@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 
 import { Pagination } from "@/components/shared/pagination";
-import { Bones, BoneKpis } from "@/components/shared/bones";
+import { Bone, Bones, BoneKpis } from "@/components/shared/bones";
 import { SkeletonProductGrid } from "@/components/shared/skeleton-loader";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
 import { useAuthStore } from "@/store/auth-store";
@@ -752,7 +752,7 @@ export default function ProductosPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-full"
       style={{ backgroundColor: "var(--background)" }}
     >
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
@@ -763,7 +763,7 @@ export default function ProductosPage() {
               Catálogo de Productos
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {total} productos
+              {loading ? <Bone className="h-3.5 w-24" /> : <>{total} productos</>}
               {!canCreate && !canEdit && (
                 <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded-full">
                   Solo lectura

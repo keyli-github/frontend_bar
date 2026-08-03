@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Banknote,
   Calculator,
   Eye,
   History,
@@ -11,11 +12,15 @@ import {
   LockKeyhole,
   PlusCircle,
   RefreshCw,
+  Scale,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Bone, Bones, BoneTable } from "@/components/shared/bones";
 import { ModalShell } from "@/components/shared/modal-shell";
 import { Pagination } from "@/components/shared/pagination";
+import { StatCard } from "@/components/shared/stat-card";
 import { ApiError, cajaApi } from "@/lib/api";
 import { listEstablecimientos } from "@/lib/api/establecimientos.api";
 import { formatCurrency } from "@/lib/format";
@@ -40,7 +45,7 @@ type CajaTab = "actual" | "historial";
 const HISTORY_PAGE_SIZE = 10;
 const DETAIL_MOVEMENTS_PAGE_SIZE = 10;
 const FIELD_CLASS =
-  "h-10 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground outline-none focus:border-amber-500/60";
+  "h-9 w-full rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-foreground outline-none transition-colors focus:border-amber-500/60";
 
 const emptyDenominationCounts = () =>
   Object.fromEntries(
@@ -477,88 +482,94 @@ export default function CajaPage() {
     "Sin sede";
 
   return (
-    <div className="min-h-screen bg-background p-3 sm:p-4 lg:p-6">
-      <div className="space-y-5">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="min-h-full bg-background p-3 sm:p-4 lg:p-5">
+      <div className="mx-auto max-w-[1440px] space-y-4">
+        <header className="flex flex-col gap-3 border-b border-border pb-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
               Control de Caja
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Apertura, precuadre y cierre por sede · Moneda PEN
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Operación diaria, arqueos y trazabilidad · PEN
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {isSuperadmin && activeTab === "actual" && (
-              <select
-                value={sedeId}
-                onChange={(event) => setSedeId(event.target.value)}
-                className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground"
-              >
-                {sedes.map((sede) => (
-                  <option key={sede.id} value={sede.id}>
-                    {sede.nombre}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              type="button"
-              onClick={() =>
-                void (activeTab === "actual" ? loadCaja() : loadHistory())
-              }
-              disabled={
-                activeTab === "actual"
-                  ? loading || !effectiveSedeId
-                  : historyLoading
-              }
-              className="grid size-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground disabled:opacity-50"
-              aria-label={
-                activeTab === "actual"
-                  ? "Actualizar caja actual"
-                  : "Actualizar historial"
-              }
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div
+              className="inline-flex h-9 rounded-lg border border-border bg-muted/35 p-0.5"
+              role="tablist"
+              aria-label="Vistas de caja"
             >
-              <RefreshCw
-                size={16}
-                className={
-                  (activeTab === "actual" ? loading : historyLoading)
-                    ? "animate-spin"
-                    : ""
+              {(
+                [
+                  ["actual", "Caja actual", Landmark],
+                  ["historial", "Historial", History],
+                ] as const
+              ).map(([value, label, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === value}
+                  onClick={() => setActiveTab(value)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors",
+                    activeTab === value
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon
+                    size={14}
+                    className={activeTab === value ? "text-amber-500" : undefined}
+                  />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              {isSuperadmin && activeTab === "actual" && (
+                <select
+                  value={sedeId}
+                  onChange={(event) => setSedeId(event.target.value)}
+                  aria-label="Sede de caja"
+                  className="h-9 min-w-44 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground outline-none focus:border-amber-500/60"
+                >
+                  {sedes.map((sede) => (
+                    <option key={sede.id} value={sede.id}>
+                      {sede.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  void (activeTab === "actual" ? loadCaja() : loadHistory())
                 }
-              />
-            </button>
+                disabled={
+                  activeTab === "actual"
+                    ? loading || !effectiveSedeId
+                    : historyLoading
+                }
+                className="grid size-9 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-amber-500/40 hover:text-amber-500 disabled:opacity-50"
+                aria-label={
+                  activeTab === "actual"
+                    ? "Actualizar caja actual"
+                    : "Actualizar historial"
+                }
+              >
+                <RefreshCw
+                  size={16}
+                  className={
+                    (activeTab === "actual" ? loading : historyLoading)
+                      ? "animate-spin"
+                      : ""
+                  }
+                />
+              </button>
+            </div>
           </div>
         </header>
-
-        <div
-          className="inline-flex rounded-xl border border-border bg-card p-1"
-          role="tablist"
-          aria-label="Vistas de caja"
-        >
-          {(
-            [
-              ["actual", "Caja actual", Landmark],
-              ["historial", "Historial", History],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === value}
-              onClick={() => setActiveTab(value)}
-              className={cn(
-                "flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors",
-                activeTab === value
-                  ? "bg-amber-500 text-black"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <Icon size={15} /> {label}
-            </button>
-          ))}
-        </div>
 
         {activeTab === "actual" && (
           <Bones
@@ -566,7 +577,7 @@ export default function CajaPage() {
             loading={loading}
             placeholder={<CajaCurrentSkeleton />}
           >
-            <div className="space-y-5">
+            <div className="space-y-4">
         {error && (
           <p
             role="alert"
@@ -577,32 +588,42 @@ export default function CajaPage() {
         )}
 
         {!loading && !caja && (
-          <section className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-6 text-center">
-            <div className="mx-auto grid size-14 place-items-center rounded-full bg-amber-500/10 text-amber-500">
-              <Landmark size={25} />
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-3 border-b border-border bg-muted/15 px-4 py-3">
+              <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                <Landmark size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-foreground">Caja cerrada</h2>
+                  <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Sin turno
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">{selectedSedeName}</p>
+              </div>
             </div>
-            <h2 className="mt-4 text-xl font-bold text-foreground">
-              Caja cerrada
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {selectedSedeName}
-            </p>
             {canOpen ? (
-              <div className="mx-auto mt-6 max-w-xl text-left">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Conteo del fondo de apertura
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div className="p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Fondo de apertura</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      Ingresa la cantidad física por denominación.
+                    </p>
+                  </div>
+                  <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    10 denominaciones
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
                   {CAJA_DENOMINACIONES.map((denominacion) => (
                     <label
                       key={denominacion}
-                      className="rounded-xl border border-border bg-muted/30 p-2 text-center"
+                      className="rounded-lg border border-border bg-muted/20 p-2 text-center transition-colors focus-within:border-amber-500/50 focus-within:bg-amber-500/[0.04]"
                     >
-                      <span className="block text-xs font-bold text-foreground">
+                      <span className="block text-[11px] font-bold text-foreground">
                         S/ {denominacion.toFixed(denominacion < 1 ? 2 : 0)}
-                      </span>
-                      <span className="mt-0.5 block text-[9px] uppercase tracking-wider text-muted-foreground">
-                        {denominacion >= 10 ? "Billetes" : "Monedas"}
                       </span>
                       <input
                         type="number"
@@ -618,31 +639,33 @@ export default function CajaPage() {
                             [String(denominacion)]: event.target.value,
                           }))
                         }
-                        className="mt-2 h-10 w-full rounded-lg border border-border bg-card px-2 text-center font-mono text-sm text-foreground outline-none focus:border-amber-500/60"
+                        className="mt-1.5 h-8 w-full rounded-md border border-border bg-card px-1 text-center font-mono text-xs text-foreground outline-none focus:border-amber-500/60"
                         placeholder="0"
                       />
                     </label>
                   ))}
                 </div>
-                <div className="mt-4 flex items-center justify-between rounded-xl bg-amber-500/10 px-4 py-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Total calculado
-                  </span>
-                  <strong className="font-mono text-xl text-amber-500">
-                    {formatCurrency(montoApertura)}
-                  </strong>
+                <div className="mt-3 flex flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <span className="block text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Total calculado
+                    </span>
+                    <strong className="font-mono text-lg text-amber-500">
+                      {formatCurrency(montoApertura)}
+                    </strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void abrir()}
+                    disabled={saving || !effectiveSedeId}
+                    className="h-9 rounded-lg bg-amber-500 px-5 text-xs font-bold text-black transition-colors hover:bg-amber-400 disabled:opacity-50"
+                  >
+                    {saving ? "ABRIENDO…" : "ABRIR CAJA"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void abrir()}
-                  disabled={saving || !effectiveSedeId}
-                  className="mt-3 h-11 w-full rounded-xl bg-amber-500 font-bold text-black hover:bg-amber-400 disabled:opacity-50"
-                >
-                  ABRIR CAJA
-                </button>
               </div>
             ) : (
-              <p className="mt-5 text-sm text-muted-foreground">
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                 No tienes permiso para abrir caja.
               </p>
             )}
@@ -651,12 +674,15 @@ export default function CajaPage() {
 
         {caja && (
           <>
-            <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+            <section className="flex flex-col gap-3 rounded-xl border border-border bg-card px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="size-2.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold text-emerald-500">
+                  <span className="size-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+                  <span className="text-sm font-semibold text-emerald-500">
                     Caja abierta
+                  </span>
+                  <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
+                    {caja.id.slice(0, 8)}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -664,22 +690,22 @@ export default function CajaPage() {
                   {caja.usuarioApertura.username}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {canMove && (
                   <>
                     <button
                       type="button"
                       onClick={() => openMovimiento("entrada")}
-                      className="flex h-10 items-center gap-2 rounded-lg border border-emerald-500/30 px-3 text-sm font-medium text-emerald-500 hover:bg-emerald-500/10"
+                      className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-500/25 px-3 text-xs font-semibold text-emerald-500 transition-colors hover:bg-emerald-500/10"
                     >
-                      <ArrowUp size={16} /> Registrar entrada
+                      <ArrowUp size={14} /> Entrada
                     </button>
                     <button
                       type="button"
                       onClick={() => openMovimiento("salida")}
-                      className="flex h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-foreground hover:bg-muted"
+                      className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
                     >
-                      <PlusCircle size={16} /> Registrar salida
+                      <PlusCircle size={14} /> Salida
                     </button>
                   </>
                 )}
@@ -687,54 +713,55 @@ export default function CajaPage() {
                   <button
                     type="button"
                     onClick={() => setArqueoMode("precuadre")}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-amber-500/30 px-3 text-sm font-medium text-amber-500 hover:bg-amber-500/10"
+                    className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/25 px-3 text-xs font-semibold text-amber-500 transition-colors hover:bg-amber-500/10"
                   >
-                    <Calculator size={16} /> Precuadre
+                    <Calculator size={14} /> Precuadre
                   </button>
                 )}
                 {canClose && (
                   <button
                     type="button"
                     onClick={() => setArqueoMode("cierre")}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-red-500/30 px-3 text-sm font-medium text-red-500 hover:bg-red-500/10"
+                    className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/25 px-3 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10"
                   >
-                    <LockKeyhole size={16} /> Cerrar caja
+                    <LockKeyhole size={14} /> Cerrar
                   </button>
                 )}
               </div>
             </section>
 
-            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[
-                ["APERTURA", caja.montoApertura, "text-foreground"],
-                ["ENTRADAS", caja.resumen.totalEntradas, "text-emerald-500"],
-                ["SALIDAS", caja.resumen.totalSalidas, "text-red-500"],
-                [
-                  "SALDO ESPERADO",
-                  caja.resumen.saldoEsperado,
-                  "text-amber-500",
-                ],
-              ].map(([label, value, tone]) => (
-                <div
-                  key={String(label)}
-                  className="rounded-xl border border-border bg-card px-4 py-3"
-                >
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    {label}
-                  </p>
-                  <p className={cn("mt-1 font-mono text-lg font-bold", tone)}>
-                    {formatCurrency(Number(value))}
-                  </p>
-                </div>
-              ))}
+            <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <StatCard
+                label="Apertura"
+                value={formatCurrency(caja.montoApertura)}
+                icon={<Banknote size={14} />}
+              />
+              <StatCard
+                label="Entradas"
+                value={formatCurrency(caja.resumen.totalEntradas)}
+                icon={<TrendingUp size={14} />}
+                valueColor="text-emerald-500"
+              />
+              <StatCard
+                label="Salidas"
+                value={formatCurrency(caja.resumen.totalSalidas)}
+                icon={<TrendingDown size={14} />}
+                valueColor="text-red-500"
+              />
+              <StatCard
+                label="Saldo esperado"
+                value={formatCurrency(caja.resumen.saldoEsperado)}
+                icon={<Scale size={14} />}
+                valueColor="text-amber-500"
+              />
             </section>
 
             {caja.precuadreAt && (
-              <section className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm">
+              <section className="flex flex-col gap-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                 <p className="font-semibold text-amber-500">
                   Último precuadre: {formatDateTime(caja.precuadreAt)}
                 </p>
-                <p className="mt-1 text-muted-foreground">
+                <p className="text-muted-foreground">
                   Declarado {formatCurrency(caja.montoDeclaradoPrecuadre ?? 0)}{" "}
                   · Diferencia {formatCurrency(caja.diferenciaPrecuadre ?? 0)}
                 </p>
@@ -742,8 +769,8 @@ export default function CajaPage() {
             )}
 
             <section className="overflow-hidden rounded-xl border border-border bg-card">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <h2 className="font-semibold text-foreground">
+              <div className="flex items-center justify-between border-b border-border bg-muted/10 px-4 py-3">
+                <h2 className="text-sm font-semibold text-foreground">
                   Movimientos del turno
                 </h2>
                 <span className="text-xs text-muted-foreground">
@@ -751,12 +778,12 @@ export default function CajaPage() {
                 </span>
               </div>
               {movimientos.length === 0 ? (
-                <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                   Aún no hay movimientos.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-sm">
+                  <table className="w-full min-w-[760px] text-xs">
                     <thead>
                       <tr className="border-b border-border">
                         {[
@@ -770,7 +797,7 @@ export default function CajaPage() {
                         ].map((heading) => (
                           <th
                             key={heading}
-                            className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                            className="px-3 py-2.5 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
                           >
                             {heading}
                           </th>
@@ -780,10 +807,10 @@ export default function CajaPage() {
                     <tbody className="divide-y divide-border">
                       {movimientos.map((movimiento) => (
                         <tr key={movimiento.id} className="hover:bg-muted/30">
-                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-muted-foreground">
                             {formatDateTime(movimiento.createdAt)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2.5">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold",
@@ -800,15 +827,15 @@ export default function CajaPage() {
                               {movimiento.tipo}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-foreground">
+                          <td className="px-3 py-2.5 text-xs font-medium text-foreground">
                             {movimiento.concepto}
                           </td>
-                          <td className="px-4 py-3 font-medium text-muted-foreground">
+                          <td className="px-3 py-2.5 text-xs font-medium text-muted-foreground">
                             {movimiento.medioPago}
                           </td>
                           <td
                             className={cn(
-                              "px-4 py-3 font-mono font-semibold",
+                              "px-3 py-2.5 font-mono text-xs font-semibold",
                               movimiento.tipo === "ENTRADA"
                                 ? "text-emerald-500"
                                 : "text-red-500",
@@ -817,12 +844,12 @@ export default function CajaPage() {
                             {movimiento.tipo === "ENTRADA" ? "+" : "-"}
                             {formatCurrency(movimiento.monto)}
                           </td>
-                          <td className="max-w-[180px] truncate px-4 py-3 text-xs text-muted-foreground">
+                          <td className="max-w-[180px] truncate px-3 py-2.5 text-[11px] text-muted-foreground">
                             {movimiento.comprobante ??
                               movimiento.referencia ??
                               "—"}
                           </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                          <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
                             {movimiento.usuario?.username ?? "Sistema"}
                           </td>
                         </tr>
@@ -840,9 +867,9 @@ export default function CajaPage() {
 
         {activeTab === "historial" && (
           <section className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-3 border-b border-border bg-muted/10 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="font-semibold text-foreground">
+                <h2 className="text-sm font-semibold text-foreground">
                   Sesiones de caja
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -859,7 +886,7 @@ export default function CajaPage() {
                         setHistoryPage(1);
                         setHistoryLoading(true);
                       }}
-                      className={cn(FIELD_CLASS, "sm:w-52")}
+                      className={cn(FIELD_CLASS, "h-9 text-xs sm:w-48")}
                     >
                       <option value="">Todas las sedes</option>
                       {sedes.map((sede) => (
@@ -878,7 +905,7 @@ export default function CajaPage() {
                       setHistoryPage(1);
                       setHistoryLoading(true);
                     }}
-                    className={cn(FIELD_CLASS, "sm:w-44")}
+                    className={cn(FIELD_CLASS, "h-9 text-xs sm:w-40")}
                   >
                     <option value="">Todos</option>
                     <option value="ABIERTA">Abierta</option>
@@ -903,7 +930,7 @@ export default function CajaPage() {
               placeholder={<BoneTable rows={HISTORY_PAGE_SIZE} cols={7} />}
             >
               {historyError ? null : historyRows.length === 0 ? (
-                <div className="flex flex-col items-center px-4 py-14 text-center">
+                <div className="flex flex-col items-center px-4 py-10 text-center">
                   <History size={24} className="text-muted-foreground" />
                   <p className="mt-3 text-sm font-semibold text-foreground">
                     No hay sesiones de caja
@@ -928,7 +955,7 @@ export default function CajaPage() {
                         ].map((heading, index) => (
                           <th
                             key={`${heading}-${index}`}
-                            className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                            className="px-3 py-2.5 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
                           >
                             {heading}
                           </th>
@@ -938,31 +965,31 @@ export default function CajaPage() {
                     <tbody className="divide-y divide-border">
                       {historyRows.map((session) => (
                         <tr key={session.id} className="hover:bg-muted/30">
-                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-muted-foreground">
                             {formatDateTime(session.abiertaAt)}
                           </td>
-                          <td className="px-4 py-3 font-medium text-foreground">
+                          <td className="px-3 py-2.5 text-xs font-medium text-foreground">
                             {session.sede.nombre}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2.5">
                             <CajaStatus estado={session.estado} />
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
+                          <td className="px-3 py-2.5 text-xs text-muted-foreground">
                             {session.usuarioApertura.username}
                           </td>
-                          <td className="px-4 py-3 font-mono font-semibold text-foreground">
+                          <td className="px-3 py-2.5 font-mono text-xs font-semibold text-foreground">
                             {formatCurrency(session.montoApertura)}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-muted-foreground">
                             {session.cerradaAt
                               ? formatDateTime(session.cerradaAt)
                               : "Pendiente"}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-3 py-2.5 text-right">
                             <button
                               type="button"
                               onClick={() => void openHistoryDetail(session.id)}
-                              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:border-amber-500/40 hover:bg-amber-500/10"
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:border-amber-500/40 hover:bg-amber-500/10"
                               aria-label={`Ver detalle de caja de ${session.sede.nombre}`}
                             >
                               <Eye size={14} /> Ver detalle
@@ -995,9 +1022,13 @@ export default function CajaPage() {
       <ModalShell
         open={Boolean(selectedCajaId)}
         title="Detalle de sesión de caja"
-        subtitle={selectedCajaId ? `Sesión ${selectedCajaId}` : undefined}
+        subtitle={
+          detail
+            ? `${detail.sede.nombre} · ${formatDateTime(detail.abiertaAt)}`
+            : "Consultando información del turno"
+        }
         onClose={closeHistoryDetail}
-        className="max-w-6xl"
+        className="max-w-5xl"
       >
         {detailError && (
           <p
@@ -1044,7 +1075,7 @@ export default function CajaPage() {
           title={`REGISTRAR ${movimientoMode.toUpperCase()}`}
           onClose={() => !saving && setShowMovimiento(false)}
         >
-          <div className="space-y-4">
+          <div className="space-y-3">
             <p className="rounded-xl border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
               {movimientoMode === "entrada"
                 ? "Las entradas representan dinero físico que ingresó a la caja, por eso su método es únicamente EFECTIVO."
@@ -1159,7 +1190,7 @@ export default function CajaPage() {
             </strong>
             . Ingresa el efectivo contado sin modificar el saldo calculado.
           </p>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <Field label="Efectivo declarado (S/)">
               <input
                 type="number"
@@ -1209,14 +1240,14 @@ export default function CajaPage() {
 
 function CajaCurrentSkeleton() {
   return (
-    <div className="space-y-5" aria-label="Cargando caja actual" role="status">
-      <div className="rounded-xl border border-border bg-card p-4">
+    <div className="space-y-4" aria-label="Cargando caja actual" role="status">
+      <div className="rounded-xl border border-border bg-card p-3">
         <Bone className="h-4 w-32" />
         <Bone className="mt-2 h-3 w-64" />
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="rounded-xl border border-border bg-card p-4">
+          <div key={index} className="rounded-xl border border-border bg-card p-3">
             <Bone className="h-2.5 w-20" />
             <Bone className="mt-2 h-5 w-28" />
           </div>
@@ -1231,13 +1262,13 @@ function CajaCurrentSkeleton() {
 
 function CajaDetailSkeleton() {
   return (
-    <div className="space-y-4" aria-label="Cargando detalle de caja" role="status">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="space-y-3" aria-label="Cargando detalle de caja" role="status">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <Bone key={index} className="h-20 rounded-xl" />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3">
         {Array.from({ length: 3 }, (_, index) => (
           <Bone key={index} className="h-48 rounded-xl" />
         ))}
@@ -1251,10 +1282,10 @@ function CajaStatus({ estado }: { estado: CajaEstado }) {
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold",
+        "inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold",
         estado === "ABIERTA"
-          ? "bg-emerald-500/10 text-emerald-500"
-          : "bg-muted text-muted-foreground",
+          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
+          : "border-border bg-muted text-muted-foreground",
       )}
     >
       {estado}
@@ -1286,26 +1317,15 @@ function CajaDetailView({
   onMovementPageChange: (page: number) => void;
 }) {
   return (
-    <div className="space-y-5">
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          ["Apertura", detail.montoApertura, "text-foreground"],
-          ["Entradas", detail.resumen.totalEntradas, "text-emerald-500"],
-          ["Salidas", detail.resumen.totalSalidas, "text-red-500"],
-          ["Saldo esperado", detail.resumen.saldoEsperado, "text-amber-500"],
-        ].map(([label, amount, tone]) => (
-          <div key={String(label)} className="rounded-xl border border-border bg-card p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {label}
-            </p>
-            <p className={cn("mt-1 font-mono text-lg font-bold", tone)}>
-              {formatCurrency(Number(amount))}
-            </p>
-          </div>
-        ))}
+    <div className="space-y-4">
+      <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <StatCard label="Apertura" value={formatCurrency(detail.montoApertura)} icon={<Banknote size={14} />} />
+        <StatCard label="Entradas" value={formatCurrency(detail.resumen.totalEntradas)} icon={<TrendingUp size={14} />} valueColor="text-emerald-500" />
+        <StatCard label="Salidas" value={formatCurrency(detail.resumen.totalSalidas)} icon={<TrendingDown size={14} />} valueColor="text-red-500" />
+        <StatCard label="Saldo esperado" value={formatCurrency(detail.resumen.saldoEsperado)} icon={<Scale size={14} />} valueColor="text-amber-500" />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3">
         <DetailSection title="Apertura">
           <DetailValue label="Sede" value={detail.sede.nombre} />
           <DetailValue label="Estado" value={<CajaStatus estado={detail.estado} />} />
@@ -1369,7 +1389,7 @@ function CajaDetailView({
       </div>
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="border-b border-border px-4 py-3">
+        <div className="border-b border-border bg-muted/10 px-3 py-2.5">
           <h3 className="text-sm font-semibold text-foreground">
             Denominaciones de apertura
           </h3>
@@ -1380,24 +1400,24 @@ function CajaDetailView({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
+            <table className="w-full min-w-[480px] text-xs">
               <thead>
                 <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3">Denominación</th>
-                  <th className="px-4 py-3">Cantidad</th>
-                  <th className="px-4 py-3 text-right">Subtotal</th>
+                  <th className="px-3 py-2.5">Denominación</th>
+                  <th className="px-3 py-2.5">Cantidad</th>
+                  <th className="px-3 py-2.5 text-right">Subtotal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {detail.denominaciones.map((item) => (
                   <tr key={item.denominacion}>
-                    <td className="px-4 py-3 font-mono text-foreground">
+                    <td className="px-3 py-2.5 font-mono text-foreground">
                       {formatCurrency(item.denominacion)}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-3 py-2.5 text-muted-foreground">
                       {item.cantidad}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-foreground">
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
                       {formatCurrency(item.subtotal)}
                     </td>
                   </tr>
@@ -1409,7 +1429,7 @@ function CajaDetailView({
       </section>
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-border bg-muted/10 px-3 py-2.5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Movimientos</h3>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -1424,7 +1444,7 @@ function CajaDetailView({
                   event.target.value as "" | CajaMovimientoTipo,
                 )
               }
-              className={cn(FIELD_CLASS, "sm:w-40")}
+              className={cn(FIELD_CLASS, "sm:w-36")}
             >
               <option value="">Todos</option>
               <option value="ENTRADA">Entrada</option>
@@ -1451,7 +1471,7 @@ function CajaDetailView({
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm">
+              <table className="w-full min-w-[1040px] text-xs">
                 <thead>
                   <tr className="border-b border-border">
                     {[
@@ -1467,7 +1487,7 @@ function CajaDetailView({
                     ].map((heading) => (
                       <th
                         key={heading}
-                        className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                        className="px-3 py-2.5 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
                       >
                         {heading}
                       </th>
@@ -1477,10 +1497,10 @@ function CajaDetailView({
                 <tbody className="divide-y divide-border">
                   {movimientos.map((movimiento) => (
                     <tr key={movimiento.id} className="hover:bg-muted/30">
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-muted-foreground">
                         {formatDateTime(movimiento.createdAt)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <span
                           className={cn(
                             "text-xs font-semibold",
@@ -1492,18 +1512,18 @@ function CajaDetailView({
                           {movimiento.tipo}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                      <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
                         {movimiento.origen}
                       </td>
-                      <td className="max-w-56 px-4 py-3 text-foreground">
+                      <td className="max-w-56 px-3 py-2.5 font-medium text-foreground">
                         {movimiento.concepto}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-3 py-2.5 text-muted-foreground">
                         {movimiento.medioPago}
                       </td>
                       <td
                         className={cn(
-                          "px-4 py-3 font-mono font-semibold",
+                          "px-3 py-2.5 font-mono font-semibold",
                           movimiento.tipo === "ENTRADA"
                             ? "text-emerald-500"
                             : "text-red-500",
@@ -1512,13 +1532,13 @@ function CajaDetailView({
                         {movimiento.tipo === "ENTRADA" ? "+" : "-"}
                         {formatCurrency(movimiento.monto)}
                       </td>
-                      <td className="max-w-40 truncate px-4 py-3 text-xs text-muted-foreground">
+                      <td className="max-w-40 truncate px-3 py-2.5 text-[11px] text-muted-foreground">
                         {movimiento.referencia ?? "Sin referencia"}
                       </td>
-                      <td className="max-w-40 truncate px-4 py-3 text-xs text-muted-foreground">
+                      <td className="max-w-40 truncate px-3 py-2.5 text-[11px] text-muted-foreground">
                         {movimiento.comprobante ?? "Sin comprobante"}
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                      <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
                         {movimiento.usuario?.username ?? "Sistema"}
                       </td>
                     </tr>
@@ -1551,11 +1571,11 @@ function DetailSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <h3 className="border-b border-border pb-3 text-sm font-semibold text-foreground">
+    <section className="rounded-xl border border-border bg-card p-3">
+      <h3 className="border-b border-border pb-2.5 text-xs font-semibold uppercase tracking-wide text-foreground">
         {title}
       </h3>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">{children}</dl>
+      <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2.5">{children}</dl>
     </section>
   );
 }
@@ -1574,7 +1594,7 @@ function DetailValue({
       <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 break-words text-sm font-medium text-foreground">
+      <dd className="mt-0.5 break-words text-xs font-medium text-foreground">
         {value}
       </dd>
     </div>
@@ -1593,9 +1613,9 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
       {label}
-      <span className="mt-1.5 block normal-case tracking-normal">
+      <span className="mt-1 block normal-case tracking-normal">
         {children}
       </span>
     </label>

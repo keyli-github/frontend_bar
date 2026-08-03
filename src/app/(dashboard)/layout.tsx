@@ -72,13 +72,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <Sidebar />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header />
         <main
           id="contenido"
           tabIndex={-1}
           /* pb-20 deja hueco al bottom-nav movil; lg:pb-0 lo recupera en escritorio */
-          className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0"
+          className="dashboard-route-content min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0"
         >
           {children}
         </main>

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Pagination } from '@/components/shared/pagination';
 import { ModalShell } from '@/components/shared/modal-shell';
-import { Bones, BoneCards, BoneList } from '@/components/shared/bones';
+import { Bone, Bones, BoneCards, BoneKpis, BoneList } from '@/components/shared/bones';
 import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
 import { useAuthStore } from '@/store/auth-store';
 import { establecimientosApi, ApiError } from '@/lib/api';
@@ -151,7 +151,7 @@ export default function SucursalesPage() {
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Sucursales</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {total} sede{total === 1 ? '' : 's'} en tu ámbito
+            {loading ? <Bone className="h-3.5 w-32" /> : <>{total} sede{total === 1 ? '' : 's'} en tu ámbito</>}
           </p>
         </div>
         {canCreate && (
@@ -171,6 +171,7 @@ export default function SucursalesPage() {
         </p>
       )}
 
+      <Bones name="sucursales-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
         {[
           { label: 'SEDES TOTALES', value: total, icon: <Building2 size={16} />, color: 'text-foreground' },
@@ -187,6 +188,7 @@ export default function SucursalesPage() {
           </div>
         ))}
       </div>
+      </Bones>
 
       <Bones name="sucursales-grid" loading={loading} placeholder={<BoneCards count={4} />}>
         {sedes.length === 0 ? (

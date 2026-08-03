@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 
 import { Pagination } from '@/components/shared/pagination';
 import { ModalShell } from '@/components/shared/modal-shell';
-import { Bones, BoneCards } from '@/components/shared/bones';
+import { Bones, BoneCards, BoneKpis, BoneTable } from '@/components/shared/bones';
 import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
 import { useAuthStore } from '@/store/auth-store';
 import { asistenciaApi, ApiError } from '@/lib/api';
@@ -250,7 +250,7 @@ export default function AsistenciaPage() {
   ];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="min-h-full" style={{ backgroundColor: 'var(--background)' }}>
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         {/* Header */}
         <div className="flex flex-col gap-3 animate-fade-in-up lg:flex-row lg:items-end lg:justify-between">
@@ -314,6 +314,7 @@ export default function AsistenciaPage() {
         )}
 
         {/* KPIs */}
+        <Bones name="asistencia-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {kpis.map((k) => (
             <div key={k.label} className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3">
@@ -322,6 +323,7 @@ export default function AsistenciaPage() {
             </div>
           ))}
         </div>
+        </Bones>
 
         {/* Resumen view */}
         {activeView === 'resumen' && (
@@ -420,7 +422,8 @@ export default function AsistenciaPage() {
               <h2 className="font-semibold text-foreground">Marcajes de la fecha seleccionada</h2>
               <p className="mt-1 text-xs text-muted-foreground">Solo se muestran los marcajes de la página actual.</p>
             </div>
-            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <Bones name="asistencia-historial" loading={loading} placeholder={<BoneTable rows={10} cols={4} />}>
+              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
@@ -435,7 +438,7 @@ export default function AsistenciaPage() {
                   {marcajes.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                        {loading ? '' : 'Sin marcajes en esta página para la fecha seleccionada.'}
+                        Sin marcajes en esta página para la fecha seleccionada.
                       </td>
                     </tr>
                   ) : (
@@ -454,7 +457,8 @@ export default function AsistenciaPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </Bones>
           </div>
         )}
 

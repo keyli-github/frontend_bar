@@ -187,7 +187,7 @@ export default function CategoriasPage() {
   }
 
   return (
-    <main className="min-h-screen space-y-5 bg-background p-3 sm:p-4 lg:p-6">
+    <main className="min-h-full space-y-5 bg-background p-3 sm:p-4 lg:p-6">
       <PageHeader
         title="Categorías"
         subtitle="Catálogo global utilizado por productos e inventario."

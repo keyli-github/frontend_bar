@@ -396,13 +396,13 @@ export default function InventarioPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-full"
       style={{ backgroundColor: "var(--background)" }}
     >
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         <PageHeader
           title="Inventario"
-          subtitle={`${total} productos con stock configurado`}
+          subtitle={loading ? " " : `${total} productos con stock configurado`}
           action={
             canCreateConfig || (canCreateProduct && canReadProducts) ? (
               <div className="flex flex-wrap gap-2">
