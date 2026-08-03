@@ -9,19 +9,30 @@
  *
  * Regla del proyecto: durante una carga NUNCA se pinta texto ("Cargando…").
  * `<Bones>` lo garantiza porque el `placeholder` cumple dos funciones:
- *   1. Es el respaldo CSS cuando todavia no existe `.bones.json` capturado
- *      (proyecto recien clonado, antes de `npm run bones`).
- *   2. Ocupa el alto real del bloque mientras Boneyard superpone los huesos
- *      pixel-perfect; sin contenido debajo, el overlay se colapsaria a 0px.
+ *   1. Es el respaldo cuando todavia no existe `.bones.json` capturado.
+ *   2. Ocupa el alto real del bloque mientras Boneyard superpone los huesos.
+ *
+ * Decisión de UX: SIN animaciones de pulso ni fades.
+ *   - Los placeholders son rectangulos estáticos del color del borde; apenas
+ *     se distinguen del fondo y no llaman la atencion.
+ *   - `transition={0}` hace que el cambio skeleton→contenido sea instantaneo.
+ *   - `animate={false}` desactiva el keyframe de pulso que genera Boneyard.
+ *   Resultado: navegar entre modulos no produce ningun destello visible.
  */
 import type { ReactNode } from 'react';
 import { Skeleton as BoneyardSkeleton } from 'boneyard-js/react';
 import { cn } from '@/lib/utils';
 
-/** Bloque individual con animacion de pulso. */
+/**
+ * Bloque de placeholder estático.
+ * Sin `animate-pulse` para que no parpadee al cargar.
+ */
 export function Bone({ className }: { className?: string }) {
   return (
-    <div aria-hidden="true" className={cn('animate-pulse rounded-md bg-muted', className)} />
+    <div
+      aria-hidden="true"
+      className={cn('rounded-md bg-border/40', className)}
+    />
   );
 }
 
@@ -43,9 +54,12 @@ export function Bones({
     <BoneyardSkeleton
       name={name}
       loading={loading}
-      /* Los huesos se capturan por ancho de viewport, no de contenedor. */
       select="viewport"
-      transition={200}
+      /* Sin fade ni keyframe propio de boneyard:
+         transition={0} → switch instantáneo skeleton↔contenido.
+         animate={false} → sin @keyframes bp-{uid} pulsante.         */
+      transition={0}
+      animate={false}
       className={className}
       fallback={placeholder}
     >
@@ -75,7 +89,7 @@ export function BoneKpis({ count = 4 }: { count?: number }) {
   );
 }
 
-/** Tabla con cabecera y filas. Sustituye al contenedor con scroll. */
+/** Tabla con cabecera y filas. */
 export function BoneTable({
   rows = 8,
   cols = 5,
@@ -91,7 +105,10 @@ export function BoneTable({
         ))}
       </div>
       {Array.from({ length: rows }, (_, r) => (
-        <div key={r} className="flex items-center gap-4 border-b border-border px-4 py-3.5 last:border-0">
+        <div
+          key={r}
+          className="flex items-center gap-4 border-b border-border px-4 py-3.5 last:border-0"
+        >
           {Array.from({ length: cols }, (_, c) => (
             <div key={c} className="flex flex-1 items-center gap-3">
               {c === 0 && <Bone className="size-8 shrink-0 rounded-full" />}
@@ -133,7 +150,7 @@ export function BoneCards({ count = 6 }: { count?: number }) {
   );
 }
 
-/** Lista vertical con separadores (sedes, actividad, sesiones). */
+/** Lista vertical con separadores. */
 export function BoneList({
   rows = 5,
   avatar = false,
@@ -157,7 +174,7 @@ export function BoneList({
   );
 }
 
-/** Barras de progreso etiquetadas (usuarios por rol). */
+/** Barras de progreso etiquetadas. */
 export function BoneBars({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2.5">
@@ -176,14 +193,15 @@ export function BoneBars({ rows = 5 }: { rows?: number }) {
 
 /**
  * Silueta del layout completo mientras se restaura la sesion.
- *
- * En esa fase todavia no se sabe si hay sesion ni que permisos trae el JWT,
- * asi que no se puede pintar el sidebar real. Un esqueleto del armazon evita
- * el salto brusco de "pantalla vacia" a "aplicacion completa".
+ * Solo aparece en la carga inicial (hard load), no en navegacion.
  */
 export function BoneAppShell() {
   return (
-    <div className="flex h-dvh overflow-hidden bg-background" role="status" aria-label="Cargando sesión">
+    <div
+      className="flex h-dvh overflow-hidden bg-background"
+      role="status"
+      aria-label="Cargando sesión"
+    >
       <aside className="hidden w-[17rem] shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-4 lg:flex">
         <Bone className="h-8 w-32" />
         <div className="space-y-2">
@@ -241,7 +259,10 @@ export function BoneCatalogo({
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: items }, (_, i) => (
-              <div key={i} className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+              <div
+                key={i}
+                className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3"
+              >
                 <Bone className="h-3 w-32" />
                 <Bone className="h-2.5 w-full" />
                 <Bone className="h-2 w-16" />
@@ -250,6 +271,15 @@ export function BoneCatalogo({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Líneas de carga para la zona de gráficas (dashboard). */
+export function BoneChartArea() {
+  return (
+    <div className="space-y-4">
+      <div className="surface h-[290px] bg-border/20" />
     </div>
   );
 }

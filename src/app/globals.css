@@ -345,6 +345,22 @@
   transform: none;
 }
 
+/* ── Sin parpadeo en placeholders de carga ─────────────────────────────────
+   Desactiva cualquier animacion de pulso dentro del viewport principal.
+   Los Bone usan bg-border/40 estatico; esta regla es un respaldo de seguridad
+   en caso de que algun componente externo (boneyard, shadcn) introduzca pulse.
+   ────────────────────────────────────────────────────────────────────────── */
+.dashboard-route-content .animate-pulse,
+.dashboard-route-content [style*="animation"] {
+  animation: none !important;
+}
+
+/* Elimina el keyframe de pulso generado dinamicamente por boneyard-js.
+   Boneyard inyecta <style> con @keyframes bp-{uid}; los elementos que lo
+   usan llevan inline style="animation: bp-{uid} ...". La regla anterior
+   neutraliza ese inline style con !important. */
+}
+
 /* ================================================================
    ACCESIBILIDAD DE MOVIMIENTO
    Respeta la preferencia del sistema: sin esto las animaciones
