@@ -137,13 +137,14 @@ export default function AuditoriaPage() {
     };
   }, [filtersKey, page, reloadToken]);
 
+  const reload = useCallback(() => setReloadToken((v) => v + 1), []);
+
   const applyFilters = useCallback(() => {
     const next: AuditQuery = {};
     if (actionDraft.trim()) next.accion = actionDraft.trim().toUpperCase();
     if (entityDraft.trim()) next.entidad = entityDraft.trim();
     if (dateFrom) next.desde = toApiDate(dateFrom);
     if (dateTo) next.hasta = toApiDate(dateTo, true);
-    setLoading(true);
     setPage(1);
     setFilters(next);
     setReloadToken((value) => value + 1);
@@ -154,14 +155,12 @@ export default function AuditoriaPage() {
     setEntityDraft('');
     setDateFrom(undefined);
     setDateTo(undefined);
-    setLoading(true);
     setPage(1);
     setFilters({});
     setReloadToken((value) => value + 1);
   }, []);
 
   const goToPage = useCallback((nextPage: number) => {
-    setLoading(true);
     setPage(nextPage);
   }, []);
 
@@ -205,7 +204,7 @@ export default function AuditoriaPage() {
           )}
         />
 
-        <Bones name="auditoria-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
+        <Bones name="auditoria-kpis" loading={loading} onRetry={reload} placeholder={<BoneKpis count={4} />}>
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="Eventos registrados"
@@ -320,6 +319,7 @@ export default function AuditoriaPage() {
           <Bones
             name="auditoria-tabla"
             loading={loading}
+            onRetry={reload}
             placeholder={<BoneTable rows={10} cols={7} />}
           >
             <div className="overflow-x-auto">

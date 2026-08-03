@@ -1,31 +1,68 @@
 'use client';
 
 /**
- * Skeletons granulares.
+ * Sistema de estados de carga con umbrales progresivos.
  *
- * Cada region de datos se envuelve en `<Bones>`, no la pagina entera: la
- * cabecera aparece de inmediato y solo el bloque que espera al API muestra
- * huesos.
+ * Fases de carga en `<Bones>`:
+ *   0 – 180 ms  → sin indicador visual (operaciones rápidas pasan inadvertidas)
+ *   180 ms – 3 s → esqueleto estático (sin animación de pulso)
+ *   3 s – 10 s   → esqueleto + advertencia discreta "tardando más de lo esperado"
+ *   > 10 s       → estado de tiempo agotado con botón "Reintentar"
  *
- * Regla del proyecto: durante una carga NUNCA se pinta texto ("Cargando…").
- * `<Bones>` lo garantiza porque el `placeholder` cumple dos funciones:
- *   1. Es el respaldo cuando todavia no existe `.bones.json` capturado.
- *   2. Ocupa el alto real del bloque mientras Boneyard superpone los huesos.
+ * Por qué este enfoque:
+ *   Si la API responde en <180 ms el usuario no ve ningún parpadeo porque el
+ *   esqueleto nunca se muestra. Para respuestas lentas, los estados escalados
+ *   informan al usuario de forma apropiada sin reemplazar datos existentes.
  *
- * Decisión de UX: SIN animaciones de pulso ni fades.
- *   - Los placeholders son rectangulos estáticos del color del borde; apenas
- *     se distinguen del fondo y no llaman la atencion.
- *   - `transition={0}` hace que el cambio skeleton→contenido sea instantaneo.
- *   - `animate={false}` desactiva el keyframe de pulso que genera Boneyard.
- *   Resultado: navegar entre modulos no produce ningun destello visible.
+ * `refreshing` (opcional):
+ *   Cuando hay datos visibles y se actualiza en segundo plano, pasar
+ *   `refreshing={true}` muestra un spinner mínimo sin ocultar el contenido.
  */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Skeleton as BoneyardSkeleton } from 'boneyard-js/react';
 import { cn } from '@/lib/utils';
+import {
+  SlowLoadingBanner,
+  TimeoutState,
+  RefreshSpinner,
+} from './loading-states';
+
+// ─── Umbrales ─────────────────────────────────────────────────────────────────
+const T_SKELETON = 180;     // ms → aparece esqueleto
+const T_SLOW     = 3_000;   // ms → advertencia de lentitud
+const T_TIMEOUT  = 10_000;  // ms → tiempo agotado (retry)
+
+type Phase = 'content' | 'skeleton' | 'slow' | 'timeout';
+
+function useLoadPhase(loading: boolean): Phase {
+  const [phase, setPhase] = useState<Phase>('content');
+
+  useEffect(() => {
+    if (!loading) {
+      // Deferred para cumplir react-hooks/set-state-in-effect.
+      // El setTimeout(fn, 0) es invisible para el usuario (<5 ms).
+      const t = setTimeout(() => setPhase('content'), 0);
+      return () => clearTimeout(t);
+    }
+
+    // Timers escalados — se cancelan todos si loading vuelve a false.
+    const t1 = setTimeout(() => setPhase('skeleton'), T_SKELETON);
+    const t2 = setTimeout(() => setPhase('slow'),     T_SLOW);
+    const t3 = setTimeout(() => setPhase('timeout'),  T_TIMEOUT);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [loading]);
+
+  return phase;
+}
+
+// ─── Bone ─────────────────────────────────────────────────────────────────────
 
 /**
- * Bloque de placeholder estático.
- * Sin `animate-pulse` para que no parpadee al cargar.
+ * Bloque de placeholder estático (sin animate-pulse para evitar parpadeo).
  */
 export function Bone({ className }: { className?: string }) {
   return (
@@ -36,35 +73,65 @@ export function Bone({ className }: { className?: string }) {
   );
 }
 
+// ─── Bones ────────────────────────────────────────────────────────────────────
+
 export function Bones({
   name,
   loading,
   placeholder,
   children,
   className,
+  onRetry,
+  refreshing = false,
 }: {
-  /** Debe coincidir con el nombre capturado en `src/bones/`. */
+  /** Nombre del snapshot capturado en `src/bones/`. */
   name: string;
   loading: boolean;
   placeholder: ReactNode;
   children: ReactNode;
   className?: string;
+  /**
+   * Función invocada al pulsar "Reintentar" cuando la carga supera
+   * los 10 segundos. Si no se provee, el botón no aparece.
+   */
+  onRetry?: () => void;
+  /**
+   * Cuando ya hay datos visibles y se actualiza en segundo plano,
+   * pasa `refreshing={true}` para mostrar un spinner discreto sin
+   * reemplazar el contenido existente.
+   */
+  refreshing?: boolean;
 }) {
+  const phase = useLoadPhase(loading);
+
+  // Tiempo agotado: reemplaza el esqueleto por el estado de error recuperable.
+  if (phase === 'timeout') {
+    return <TimeoutState onRetry={onRetry} />;
+  }
+
+  const showSkeleton = phase === 'skeleton' || phase === 'slow';
+
   return (
-    <BoneyardSkeleton
-      name={name}
-      loading={loading}
-      select="viewport"
-      /* Sin fade ni keyframe propio de boneyard:
-         transition={0} → switch instantáneo skeleton↔contenido.
-         animate={false} → sin @keyframes bp-{uid} pulsante.         */
-      transition={0}
-      animate={false}
-      className={className}
-      fallback={placeholder}
-    >
-      {loading ? placeholder : children}
-    </BoneyardSkeleton>
+    <div className={cn('relative', className)}>
+      {/* Spinner de actualización en segundo plano (no reemplaza contenido) */}
+      {refreshing && !showSkeleton && (
+        <RefreshSpinner className="absolute right-3 top-3 z-10" />
+      )}
+
+      {/* Advertencia de lentitud a los 3 s */}
+      {phase === 'slow' && <SlowLoadingBanner />}
+
+      <BoneyardSkeleton
+        name={name}
+        loading={showSkeleton}
+        select="viewport"
+        transition={0}
+        animate={false}
+        fallback={placeholder}
+      >
+        {showSkeleton ? placeholder : children}
+      </BoneyardSkeleton>
+    </div>
   );
 }
 
@@ -192,8 +259,8 @@ export function BoneBars({ rows = 5 }: { rows?: number }) {
 }
 
 /**
- * Silueta del layout completo mientras se restaura la sesion.
- * Solo aparece en la carga inicial (hard load), no en navegacion.
+ * Silueta del layout completo durante la restauración de sesión.
+ * Solo aparece en hard load, no durante la navegación entre rutas.
  */
 export function BoneAppShell() {
   return (
@@ -241,7 +308,7 @@ export function BoneAppShell() {
   );
 }
 
-/** Catalogo agrupado por modulo (permisos). */
+/** Catálogo agrupado por módulo (permisos). */
 export function BoneCatalogo({
   groups = 3,
   items = 4,
@@ -275,11 +342,7 @@ export function BoneCatalogo({
   );
 }
 
-/** Líneas de carga para la zona de gráficas (dashboard). */
+/** Placeholder para el área de gráficas del dashboard. */
 export function BoneChartArea() {
-  return (
-    <div className="space-y-4">
-      <div className="surface h-[290px] bg-border/20" />
-    </div>
-  );
+  return <div className="surface h-[290px] bg-border/20" />;
 }

@@ -76,6 +76,8 @@ export default function KardexPage() {
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   /** Debounce de la busqueda; cualquier cambio de filtro vuelve a la pagina 1. */
   useEffect(() => {
@@ -116,11 +118,10 @@ export default function KardexPage() {
     return () => {
       cancelled = true;
     };
-  }, [canRead, pagina, debouncedSearch, activeFilter, dateFrom, dateTo]);
+  }, [canRead, pagina, debouncedSearch, activeFilter, dateFrom, dateTo, reloadKey]);
 
-  /** El spinner se activa aqui, no en el efecto, para no encadenar renders. */
+  /** Cambia de página SIN resetear loading: contenido previo permanece visible. */
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
@@ -165,7 +166,7 @@ export default function KardexPage() {
         )}
 
         {/* KPIs */}
-        <Bones name="kardex-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
+        <Bones name="kardex-kpis" loading={loading} onRetry={reload} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
             {
@@ -267,6 +268,7 @@ export default function KardexPage() {
           <Bones
             name="kardex-tabla"
             loading={loading}
+            onRetry={reload}
             placeholder={<BoneTable rows={PAGE_SIZE} cols={12} />}
           >
             {movimientos.length === 0 ? (

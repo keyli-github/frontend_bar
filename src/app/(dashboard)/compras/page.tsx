@@ -932,12 +932,12 @@ export default function ComprasPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setPLoading(true);
       setPDebouncedSearch(pSearch.trim());
       setPPagina(1);
     }, 350);
     return () => clearTimeout(timer);
   }, [pSearch]);
+
 
   // Fetch proveedores
   useEffect(() => {
@@ -969,40 +969,31 @@ export default function ComprasPage() {
     };
   }, [canRead, activeTab, pPagina, pReload, pDebouncedSearch, pActivo]);
 
-  // Los spinners se activan en los handlers, no dentro de los efectos, para no
-  // encadenar renders. El estado inicial ya arranca en `true`.
+  // Comentario eliminado: ya no se activa loading en handlers (sin parpadeo).
   const irAOrdenPagina = useCallback((page: number) => {
-    setOLoading(true);
     setOPagina(page);
   }, []);
 
   const filtrarOrdenes = useCallback((estado: "Todas" | CompraEstado) => {
     if (estado === statusFilter) {
       if (oPagina === 1) return;
-      setOLoading(true);
       setOPagina(1);
       return;
     }
-    setOLoading(true);
-    setResumenLoading(true);
     setStatusFilter(estado);
     setOPagina(1);
   }, [oPagina, statusFilter]);
 
   const recargarOrdenes = useCallback(() => {
-    setOLoading(true);
-    setResumenLoading(true);
     setOReload((k) => k + 1);
   }, []);
 
   const irAProveedorPagina = useCallback((page: number) => {
-    setPLoading(true);
     setPPagina(page);
   }, []);
 
   const filtrarProveedoresActivos = useCallback(
     (value: "" | "true" | "false") => {
-      setPLoading(true);
       setPActivo(value);
       setPPagina(1);
     },
@@ -1010,7 +1001,6 @@ export default function ComprasPage() {
   );
 
   const recargarProveedores = useCallback(() => {
-    setPLoading(true);
     setPReload((k) => k + 1);
   }, []);
 
@@ -1073,7 +1063,7 @@ export default function ComprasPage() {
         </div>
 
         {/* KPIs */}
-        <Bones name="compras-kpis" loading={resumenLoading} placeholder={<BoneKpis count={4} />}>
+        <Bones name="compras-kpis" loading={resumenLoading} onRetry={recargarOrdenes} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
             {
@@ -1179,6 +1169,7 @@ export default function ComprasPage() {
               <Bones
                 name="compras-ordenes"
                 loading={oLoading}
+                onRetry={recargarOrdenes}
                 placeholder={<BoneTable rows={PAGE_SIZE} cols={9} />}
               >
                 {ordenes.length === 0 ? (
@@ -1317,6 +1308,7 @@ export default function ComprasPage() {
             <Bones
               name="compras-proveedores"
               loading={pLoading}
+              onRetry={recargarProveedores}
               placeholder={<BoneCards count={6} />}
             >
               {proveedores.length === 0 ? (

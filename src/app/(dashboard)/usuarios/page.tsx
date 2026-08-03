@@ -175,12 +175,10 @@ export default function UsuariosPage() {
   };
 
   const recargar = useCallback(() => {
-    setLoading(true);
     setReloadToken((token) => token + 1);
   }, []);
 
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
@@ -319,7 +317,7 @@ export default function UsuariosPage() {
         </p>
       )}
 
-      <Bones name="usuarios-kpis" loading={catalogosCargando} placeholder={<BoneKpis count={2} />}>
+      <Bones name="usuarios-kpis" loading={catalogosCargando} onRetry={recargar} placeholder={<BoneKpis count={2} />}>
         <div className="grid grid-cols-2 gap-3 stagger-children">
           {roleKpis.map((kpi) => (
             <div key={kpi.key} className="surface px-3 py-2 lg:px-4 lg:py-3">
@@ -368,7 +366,7 @@ export default function UsuariosPage() {
       </p>
 
       <div className="surface overflow-hidden animate-fade-in-up">
-        <Bones name="usuarios-tabla" loading={loading} placeholder={<BoneTable rows={8} cols={7} />}>
+        <Bones name="usuarios-tabla" loading={loading} onRetry={recargar} placeholder={<BoneTable rows={8} cols={7} />}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-sm">
               <thead>

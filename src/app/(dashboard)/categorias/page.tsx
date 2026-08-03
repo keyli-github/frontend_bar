@@ -101,7 +101,6 @@ export default function CategoriasPage() {
   }, [canRead, debouncedSearch, page, reloadToken, status]);
 
   const reload = useCallback(() => {
-    setLoading(true);
     setReloadToken((value) => value + 1);
   }, []);
 
@@ -216,7 +215,6 @@ export default function CategoriasPage() {
           onChange={(event) => {
             setStatus(event.target.value as typeof status);
             setPage(1);
-            setLoading(true);
           }}
           className="h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground sm:ml-auto"
           aria-label="Filtrar categorías por estado"
@@ -236,6 +234,7 @@ export default function CategoriasPage() {
       <Bones
         name="categorias-listado"
         loading={loading}
+        onRetry={reload}
         placeholder={<BoneTable rows={8} cols={5} />}
       >
         {categorias.length === 0 ? (
@@ -342,7 +341,6 @@ export default function CategoriasPage() {
         total={total}
         pageSize={PAGE_SIZE}
         onPageChange={(nextPage) => {
-          setLoading(true);
           setPage(nextPage);
         }}
       />

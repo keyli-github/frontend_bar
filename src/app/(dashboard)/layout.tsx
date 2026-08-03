@@ -8,7 +8,9 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { useAuthStore } from '@/store/auth-store';
 import { canAccess } from '@/lib/roles';
 import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { BoneAppShell } from '@/components/shared/bones';
+import { OfflineBanner } from '@/components/shared/loading-states';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
@@ -18,6 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const boneyardBuild = useBoneyardBuild();
+  const isOnline = useNetworkStatus();
 
   // Restaura la sesion canjeando el refresh token persistido. Es idempotente,
   // asi que navegar entre rutas del dashboard no dispara peticiones extra.
@@ -73,6 +76,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Banner offline: se muestra sobre el header cuando se pierde la red */}
+        {!isOnline && <OfflineBanner />}
         <Header />
         <main
           id="contenido"

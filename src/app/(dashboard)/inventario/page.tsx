@@ -11,7 +11,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Bones, BoneKpis, BoneTable } from "@/components/shared/bones";
+// Bones no se usa en esta página (carga sin esqueletos)
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
 import { useAuthStore } from "@/store/auth-store";
 import {
@@ -98,12 +98,15 @@ export default function InventarioPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const [items, setItems] = useState<InventarioItem[]>([]);
+  // null = cargando por primera vez | [] = vacío | [...] = con datos
+  // Nunca se resetea a null en paginación/filtros: el contenido anterior
+  // permanece visible mientras llega la nueva página (sin parpadeo).
+  const [items, setItems] = useState<InventarioItem[] | null>(null);
   const [resumen, setResumen] = useState<InventarioResumen | null>(null);
   const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
-  const [loading, setLoading] = useState(true);
+  // (loading ya no es necesario: la tabla muestra items null/vacío/datos)
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -183,9 +186,7 @@ export default function InventarioPage() {
         if (!cancelled)
           setError(errorMessage(err, "No se pudo cargar el inventario."));
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .finally(() => { /* sin setLoading: tabla permanece visible */ });
 
     return () => {
       cancelled = true;
@@ -259,9 +260,8 @@ export default function InventarioPage() {
     };
   }, [canCreateConfig, configItem, isSuperadmin]);
 
-  /** El spinner se activa aqui, no en el efecto, para no encadenar renders. */
+  /** Cambia de página SIN resetear loading: el contenido previo permanece visible. */
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
@@ -336,7 +336,6 @@ export default function InventarioPage() {
           : "Producto configurado en el inventario.",
       );
       setConfigItem(undefined);
-      setLoading(true);
       setReloadKey((key) => key + 1);
     } catch (err) {
       const message = errorMessage(
@@ -375,7 +374,6 @@ export default function InventarioPage() {
       });
       toast.success("Stock actualizado.");
       setAdjustItem(null);
-      setLoading(true);
       setReloadKey((k) => k + 1);
     } catch (err) {
       const message = errorMessage(err, "No se pudo registrar el ajuste.");
@@ -402,7 +400,7 @@ export default function InventarioPage() {
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         <PageHeader
           title="Inventario"
-          subtitle={loading ? " " : `${total} productos con stock configurado`}
+          subtitle={`${total} productos con stock configurado`}
           action={
             canCreateConfig || (canCreateProduct && canReadProducts) ? (
               <div className="flex flex-wrap gap-2">
@@ -436,54 +434,48 @@ export default function InventarioPage() {
           </p>
         )}
 
-        {/* KPIs */}
-        <Bones
-          name="inventario-kpis"
-          loading={loading}
-          placeholder={<BoneKpis count={4} />}
-        >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
-            {[
-              {
-                label: "TOTAL PRODUCTOS",
-                value: String(resumen?.totalItems ?? 0),
-                color: "text-foreground",
-              },
-              {
-                label: "ESTADO CRÍTICO",
-                value: String(resumen?.critico ?? 0),
-                color: "text-red-500",
-              },
-              {
-                label: "EN ALERTA",
-                value: String(resumen?.alerta ?? 0),
-                color: "text-amber-500",
-              },
-              {
-                label: "VALOR INVENTARIO",
-                value: formatCurrency(resumen?.valorTotal ?? 0),
-                color: "text-emerald-500",
-              },
-            ].map((k) => (
-              <div
-                key={k.label}
-                className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3"
+        {/* KPIs — siempre visibles; muestran '—' mientras resumen es null */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            {
+              label: "TOTAL PRODUCTOS",
+              value: resumen != null ? String(resumen.totalItems) : '—',
+              color: "text-foreground",
+            },
+            {
+              label: "ESTADO CRÍTICO",
+              value: resumen != null ? String(resumen.critico) : '—',
+              color: "text-red-500",
+            },
+            {
+              label: "EN ALERTA",
+              value: resumen != null ? String(resumen.alerta) : '—',
+              color: "text-amber-500",
+            },
+            {
+              label: "VALOR INVENTARIO",
+              value: resumen != null ? formatCurrency(resumen.valorTotal) : '—',
+              color: "text-emerald-500",
+            },
+          ].map((k) => (
+            <div
+              key={k.label}
+              className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3"
+            >
+              <p className="text-[9px] font-semibold text-muted-foreground tracking-widest uppercase">
+                {k.label}
+              </p>
+              <p
+                className={cn(
+                  "text-base lg:text-lg font-bold font-mono mt-1",
+                  k.color,
+                )}
               >
-                <p className="text-[9px] font-semibold text-muted-foreground tracking-widest uppercase">
-                  {k.label}
-                </p>
-                <p
-                  className={cn(
-                    "text-base lg:text-lg font-bold font-mono mt-1",
-                    k.color,
-                  )}
-                >
-                  {k.value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Bones>
+                {k.value}
+              </p>
+            </div>
+          ))}
+        </div>
 
         {/* Filtros */}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -520,46 +512,52 @@ export default function InventarioPage() {
           </div>
         </div>
 
-        {/* Tabla */}
+        {/* Tabla — estructura siempre visible; filas aparecen cuando llegan los datos */}
         <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <Bones
-            name="inventario-tabla"
-            loading={loading}
-            placeholder={<BoneTable rows={PAGE_SIZE} cols={9} />}
-          >
-            {items.length === 0 ? (
-              <EmptyState
-                icon={<Package size={22} />}
-                title="Sin productos"
-                description="Prueba con otros filtros."
-              />
-            ) : (
-              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                <table className="w-full text-sm min-w-[700px]">
-                  <thead>
-                    <tr className="border-b border-border">
-                      {[
-                        "Código",
-                        "Producto",
-                        "Categoría",
-                        "Stock",
-                        "Min/Max",
-                        "Estado",
-                        "Costo",
-                        "Ubicación",
-                        "",
-                      ].map((h) => (
-                        <th
-                          key={h}
-                          className="px-4 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {items.map((item) => (
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table className="w-full text-sm min-w-[700px]">
+              <thead>
+                <tr className="border-b border-border">
+                  {[
+                    "Código",
+                    "Producto",
+                    "Categoría",
+                    "Stock",
+                    "Min/Max",
+                    "Estado",
+                    "Costo",
+                    "Ubicación",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {items === null ? (
+                  // Carga inicial: cuerpo vacío (estructura estable, sin esqueleto)
+                  <tr>
+                    <td colSpan={9} className="h-64 text-center align-middle text-sm text-muted-foreground">
+                      {error ? error : ''}
+                    </td>
+                  </tr>
+                ) : items.length === 0 ? (
+                  <tr>
+                    <td colSpan={9}>
+                      <EmptyState
+                        icon={<Package size={22} />}
+                        title="Sin productos"
+                        description="Prueba con otros filtros."
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => (
                       <tr
                         key={item.id}
                         className="hover:bg-muted/30 transition-colors"
@@ -646,12 +644,11 @@ export default function InventarioPage() {
                           )}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Bones>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
           {/* Paginación */}
           <div className="border-t border-border px-4">

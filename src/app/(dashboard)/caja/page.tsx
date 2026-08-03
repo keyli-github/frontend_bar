@@ -575,6 +575,7 @@ export default function CajaPage() {
           <Bones
             name="caja-actual"
             loading={loading}
+            onRetry={() => void loadCaja()}
             placeholder={<CajaCurrentSkeleton />}
           >
             <div className="space-y-4">
@@ -927,6 +928,7 @@ export default function CajaPage() {
             <Bones
               name="caja-historial"
               loading={historyLoading}
+              onRetry={() => void loadHistory()}
               placeholder={<BoneTable rows={HISTORY_PAGE_SIZE} cols={7} />}
             >
               {historyError ? null : historyRows.length === 0 ? (

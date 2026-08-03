@@ -104,7 +104,6 @@ export default function SeguridadPage() {
   }, [reloadToken]);
 
   const recargar = useCallback(() => {
-    setLoading(true);
     setReloadToken((n) => n + 1);
   }, []);
 
@@ -157,7 +156,7 @@ export default function SeguridadPage() {
           )}
         />
 
-        <Bones name="seguridad-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
+        <Bones name="seguridad-kpis" loading={loading} onRetry={recargar} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="SESIONES ACTIVAS" value={String(sessions.length)} subtitle="Dispositivos conectados" icon={<MonitorSmartphone size={13} />} />
           <StatCard label="OTROS DISPOSITIVOS" value={String(otherSessions.length)} subtitle="Fuera de este equipo" icon={<Laptop size={13} />} valueColor="text-blue-500" />
@@ -199,6 +198,7 @@ export default function SeguridadPage() {
             <Bones
               name="seguridad-sesiones"
               loading={loading}
+              onRetry={recargar}
               placeholder={<div className="px-4"><BoneList rows={4} avatar /></div>}
             >
             <div className="divide-y divide-border">

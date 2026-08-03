@@ -89,12 +89,10 @@ export default function SucursalesPage() {
   }, [canRead, pagina, reloadToken]);
 
   const recargar = useCallback(() => {
-    setLoading(true);
     setReloadToken((token) => token + 1);
   }, []);
 
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
@@ -171,7 +169,7 @@ export default function SucursalesPage() {
         </p>
       )}
 
-      <Bones name="sucursales-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
+      <Bones name="sucursales-kpis" loading={loading} onRetry={recargar} placeholder={<BoneKpis count={4} />}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
         {[
           { label: 'SEDES TOTALES', value: total, icon: <Building2 size={16} />, color: 'text-foreground' },
@@ -190,7 +188,7 @@ export default function SucursalesPage() {
       </div>
       </Bones>
 
-      <Bones name="sucursales-grid" loading={loading} placeholder={<BoneCards count={4} />}>
+      <Bones name="sucursales-grid" loading={loading} onRetry={recargar} placeholder={<BoneCards count={4} />}>
         {sedes.length === 0 ? (
           <p className="text-sm text-muted-foreground">No hay sedes registradas.</p>
         ) : (

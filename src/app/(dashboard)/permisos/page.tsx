@@ -52,6 +52,8 @@ export default function PermisosPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => { setPage(1); setReloadToken((v) => v + 1); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +86,7 @@ export default function PermisosPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, selectedModule]);
+  }, [page, selectedModule, reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,13 +119,11 @@ export default function PermisosPage() {
 
   const selectModule = (module: string) => {
     if (module === selectedModule && page === 1) return;
-    setLoading(true);
     setSelectedModule(module);
     setPage(1);
   };
 
   const goToPage = useCallback((nextPage: number) => {
-    setLoading(true);
     setPage(nextPage);
   }, []);
 
@@ -156,6 +156,7 @@ export default function PermisosPage() {
         <Bones
           name="permisos-kpis"
           loading={loading || catalog === null}
+          onRetry={reload}
           placeholder={<BoneKpis count={4} />}
         >
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -249,6 +250,7 @@ export default function PermisosPage() {
           <Bones
             name="permisos-tabla"
             loading={loading}
+            onRetry={reload}
             placeholder={<BoneTable rows={8} cols={4} />}
           >
             {filteredPermissions.length === 0 ? (

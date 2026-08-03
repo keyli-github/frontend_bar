@@ -172,19 +172,16 @@ export default function AsistenciaPage() {
   }, [canRead, fecha, pagina, reloadToken]);
 
   const recargar = useCallback(() => {
-    setLoading(true);
     setReloadToken((token) => token + 1);
   }, []);
 
-  /** El spinner se activa aqui, no en el efecto, para no encadenar renders. */
+  /** Cambia de página SIN resetear loading: contenido previo permanece visible. */
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
   const cambiarFecha = (value: string) => {
     if (!value) return;
-    setLoading(true);
     setPagina(1);
     setFecha(value);
   };
@@ -314,7 +311,7 @@ export default function AsistenciaPage() {
         )}
 
         {/* KPIs */}
-        <Bones name="asistencia-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
+        <Bones name="asistencia-kpis" loading={loading} onRetry={recargar} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {kpis.map((k) => (
             <div key={k.label} className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3">
@@ -327,7 +324,7 @@ export default function AsistenciaPage() {
 
         {/* Resumen view */}
         {activeView === 'resumen' && (
-          <Bones name="asistencia-grid" loading={loading} placeholder={<BoneCards count={6} />}>
+          <Bones name="asistencia-grid" loading={loading} onRetry={recargar} placeholder={<BoneCards count={6} />}>
             {planilla.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                 No hay empleados en tu ámbito para la fecha seleccionada.
@@ -422,7 +419,7 @@ export default function AsistenciaPage() {
               <h2 className="font-semibold text-foreground">Marcajes de la fecha seleccionada</h2>
               <p className="mt-1 text-xs text-muted-foreground">Solo se muestran los marcajes de la página actual.</p>
             </div>
-            <Bones name="asistencia-historial" loading={loading} placeholder={<BoneTable rows={10} cols={4} />}>
+            <Bones name="asistencia-historial" loading={loading} onRetry={recargar} placeholder={<BoneTable rows={10} cols={4} />}>
               <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <table className="w-full text-sm">
                 <thead>

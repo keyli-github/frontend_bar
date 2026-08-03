@@ -123,12 +123,10 @@ export default function RolesPage() {
   }, []);
 
   const reload = useCallback(() => {
-    setLoading(true);
     setReloadToken((value) => value + 1);
   }, []);
 
   const goToPage = useCallback((nextPage: number) => {
-    setLoading(true);
     setPage(nextPage);
   }, []);
 
@@ -199,6 +197,7 @@ export default function RolesPage() {
         <Bones
           name="roles-kpis"
           loading={loading || catalog === null}
+          onRetry={reload}
           placeholder={<BoneKpis count={4} />}
         >
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -269,6 +268,7 @@ export default function RolesPage() {
         <Bones
           name="roles-listado"
           loading={loading || catalog === null}
+          onRetry={reload}
           placeholder={<BoneTable rows={7} cols={6} />}
         >
           {filteredRoles.length === 0 ? (
