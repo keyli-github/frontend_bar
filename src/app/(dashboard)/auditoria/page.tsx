@@ -307,9 +307,9 @@ export default function AuditoriaPage() {
           <div className="flex flex-col gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Historial de actividad</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <div className="mt-0.5 text-xs text-muted-foreground">
                 {loading ? <Bone className="h-3 w-52" /> : <>{total} {total === 1 ? 'evento coincide' : 'eventos coinciden'} con la consulta</>}
-              </p>
+              </div>
             </div>
             <div className="mt-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground sm:mt-0">
               <ShieldCheck size={13} className="text-emerald-500" />

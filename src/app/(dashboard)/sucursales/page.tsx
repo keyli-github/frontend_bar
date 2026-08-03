@@ -150,9 +150,9 @@ export default function SucursalesPage() {
       <div className="flex flex-col gap-3 animate-fade-in-up sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Sucursales</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <div className="mt-1 text-sm text-muted-foreground">
             {loading ? <Bone className="h-3.5 w-32" /> : <>{total} sede{total === 1 ? '' : 's'} en tu ámbito</>}
-          </p>
+          </div>
         </div>
         {canCreate && (
           <button
