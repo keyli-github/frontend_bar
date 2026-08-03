@@ -23,7 +23,6 @@ import {
   Landmark,
   Package,
   ShieldCheck,
-  ShoppingCart,
   Truck,
   UtensilsCrossed,
 } from 'lucide-react';
@@ -53,11 +52,10 @@ export const NAV_ROOT: NavItem = {
 export const NAV_MODULES: NavModule[] = [
   {
     id: 'operaciones',
-    label: 'Operaciones',
+    label: 'Caja',
     icon: BarChart3,
     items: [
       { name: 'Caja', href: '/caja', icon: Landmark },
-      { name: 'Ventas', href: '/ventas', icon: ShoppingCart },
     ],
   },
   {
