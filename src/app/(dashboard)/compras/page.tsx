@@ -2,6 +2,7 @@
 
 /** Compras: ordenes de compra + proveedores, conectado a ComprasController. */
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 
 import { Pagination } from "@/components/shared/pagination";
 import { Bones, BoneTable, BoneCards } from "@/components/shared/bones";
@@ -16,9 +17,11 @@ import type {
   Compra,
   CompraQuery,
   CompraEstado,
+  ComprasResumen,
   Proveedor,
   ProveedorQuery,
   CreateProveedorPayload,
+  UpdateProveedorPayload,
   CreateCompraPayload,
   CreateCompraItem,
   Producto,
@@ -109,10 +112,13 @@ function OrderDetailModal({
     setError(null);
     try {
       await comprasApi.cambiarEstadoCompra(order.id, { estado });
+      toast.success(`Orden marcada como ${estado.toLowerCase()}.`);
       onChanged();
       onClose();
     } catch (err) {
-      setError(errorMessage(err, "No se pudo cambiar el estado."));
+      const message = errorMessage(err, "No se pudo cambiar el estado.");
+      setError(message);
+      toast.error(message);
       setSaving(false);
     }
   };
@@ -358,7 +364,7 @@ function NewOrderModal({
   useEffect(() => {
     let cancelled = false;
     productosApi
-      .listProductos({ limite: 200, activo: "true" })
+      .listProductos({ limite: 100, activo: "true" })
       .then((res) => {
         if (!cancelled) setProductos(res.data);
       })
@@ -407,10 +413,13 @@ function NewOrderModal({
         })),
       };
       await comprasApi.createCompra(payload);
+      toast.success("Orden de compra creada.");
       onCreated();
       onClose();
     } catch (err) {
-      setError(errorMessage(err, "No se pudo crear la orden."));
+      const message = errorMessage(err, "No se pudo crear la orden.");
+      setError(message);
+      toast.error(message);
       setSaving(false);
     }
   };
@@ -614,45 +623,83 @@ function NewOrderModal({
   );
 }
 
-/* ─── NUEVO PROVEEDOR ─── */
-function NewProveedorModal({
+/* ─── CREAR / EDITAR PROVEEDOR ─── */
+interface ProveedorForm {
+  nombre: string;
+  categoria: string;
+  contacto: string;
+  telefono: string;
+  email: string;
+  activo: boolean;
+}
+
+function ProveedorModal({
+  proveedor,
   onClose,
-  onCreated,
+  onSaved,
 }: {
+  proveedor?: Proveedor;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }) {
-  const [form, setForm] = useState<CreateProveedorPayload>({
-    nombre: "",
-    categoria: "",
-    contacto: "",
-    telefono: "",
-    email: "",
+  const [form, setForm] = useState<ProveedorForm>({
+    nombre: proveedor?.nombre ?? "",
+    categoria: proveedor?.categoria ?? "",
+    contacto: proveedor?.contacto ?? "",
+    telefono: proveedor?.telefono ?? "",
+    email: proveedor?.email ?? "",
+    activo: proveedor?.activo ?? true,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const set = <K extends keyof CreateProveedorPayload>(
+  const set = <K extends keyof ProveedorForm>(
     k: K,
-    v: CreateProveedorPayload[K],
+    v: ProveedorForm[K],
   ) => setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async () => {
-    if (!form.nombre.trim()) return;
+    const nombre = form.nombre.trim();
+    if (nombre.length < 2) {
+      setError("El nombre debe tener al menos 2 caracteres.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await comprasApi.createProveedor({
-        nombre: form.nombre.trim(),
-        categoria: form.categoria?.trim() || undefined,
-        contacto: form.contacto?.trim() || undefined,
-        telefono: form.telefono?.trim() || undefined,
-        email: form.email?.trim() || undefined,
-      });
-      onCreated();
+      if (proveedor) {
+        const payload: UpdateProveedorPayload = {
+          nombre,
+          categoria: form.categoria.trim(),
+          contacto: form.contacto.trim(),
+          telefono: form.telefono.trim(),
+          email: form.email.trim(),
+          activo: form.activo,
+        };
+        await comprasApi.updateProveedor(proveedor.id, payload);
+        toast.success("Proveedor actualizado.");
+      } else {
+        const payload: CreateProveedorPayload = {
+          nombre,
+          categoria: form.categoria.trim() || undefined,
+          contacto: form.contacto.trim() || undefined,
+          telefono: form.telefono.trim() || undefined,
+          email: form.email.trim() || undefined,
+        };
+        await comprasApi.createProveedor(payload);
+        toast.success("Proveedor creado.");
+      }
+      onSaved();
       onClose();
     } catch (err) {
-      setError(errorMessage(err, "No se pudo crear el proveedor."));
+      const message = errorMessage(
+        err,
+        proveedor
+          ? "No se pudo actualizar el proveedor."
+          : "No se pudo crear el proveedor.",
+      );
+      setError(message);
+      toast.error(message);
       setSaving(false);
     }
   };
@@ -663,10 +710,10 @@ function NewProveedorModal({
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={() => !saving && onClose()}
       />
-      <div className="relative w-full max-w-md bg-popover border border-border rounded-2xl p-6 animate-scale-in">
+      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-popover border border-border rounded-2xl p-6 animate-scale-in">
         <div className="flex justify-between items-center mb-5">
           <h3 className="font-bold text-foreground text-base">
-            NUEVO PROVEEDOR
+            {proveedor ? "EDITAR PROVEEDOR" : "NUEVO PROVEEDOR"}
           </h3>
           <button onClick={onClose} disabled={saving}>
             <X size={20} className="text-muted-foreground" />
@@ -680,10 +727,31 @@ function NewProveedorModal({
             <input
               value={form.nombre}
               onChange={(e) => set("nombre", e.target.value)}
+              minLength={2}
               placeholder="Distribuidora XYZ"
               className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all"
             />
+            {form.nombre.length > 0 && form.nombre.trim().length < 2 && (
+              <p className="text-xs text-destructive mt-1">
+                El nombre debe tener al menos 2 caracteres.
+              </p>
+            )}
           </div>
+          {proveedor && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Estado
+              </label>
+              <select
+                value={form.activo ? "true" : "false"}
+                onChange={(e) => set("activo", e.target.value === "true")}
+                className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all"
+              >
+                <option value="true">Activo</option>
+                <option value="false">Inactivo</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Categoría
@@ -743,10 +811,10 @@ function NewProveedorModal({
             </button>
             <button
               onClick={submit}
-              disabled={!form.nombre.trim() || saving}
+              disabled={form.nombre.trim().length < 2 || saving}
               className="flex-1 h-10 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all disabled:opacity-40"
             >
-              {saving ? "GUARDANDO…" : "CREAR"}
+              {saving ? "GUARDANDO…" : proveedor ? "GUARDAR" : "CREAR"}
             </button>
           </div>
         </div>
@@ -778,6 +846,13 @@ export default function ComprasPage() {
   const [oLoading, setOLoading] = useState(true);
   const [oError, setOError] = useState<string | null>(null);
   const [oReload, setOReload] = useState(0);
+  const [resumen, setResumen] = useState<ComprasResumen>({
+    totalOrdenes: 0,
+    pendientes: 0,
+    recibidas: 0,
+    montoPendiente: 0,
+  });
+  const [resumenError, setResumenError] = useState<string | null>(null);
 
   // Proveedores
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -787,11 +862,42 @@ export default function ComprasPage() {
   const [pLoading, setPLoading] = useState(true);
   const [pError, setPError] = useState<string | null>(null);
   const [pReload, setPReload] = useState(0);
+  const [pSearch, setPSearch] = useState("");
+  const [pDebouncedSearch, setPDebouncedSearch] = useState("");
+  const [pActivo, setPActivo] = useState<"" | "true" | "false">("");
 
   // Modales
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showNewProv, setShowNewProv] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Compra | null>(null);
+  const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(
+    null,
+  );
+
+  // Fetch de KPIs con el mismo filtro de estado que la lista de ordenes.
+  useEffect(() => {
+    if (!canRead) return;
+    let cancelled = false;
+    comprasApi
+      .getComprasResumen(
+        statusFilter === "Todas" ? {} : { estado: statusFilter },
+      )
+      .then((data) => {
+        if (cancelled) return;
+        setResumen(data);
+        setResumenError(null);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setResumenError(
+            errorMessage(err, "No se pudo cargar el resumen de compras."),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canRead, statusFilter, oReload]);
 
   // Fetch ordenes
   useEffect(() => {
@@ -820,11 +926,22 @@ export default function ComprasPage() {
     };
   }, [canRead, activeTab, oPagina, statusFilter, oReload]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPLoading(true);
+      setPDebouncedSearch(pSearch.trim());
+      setPPagina(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [pSearch]);
+
   // Fetch proveedores
   useEffect(() => {
     if (!canRead || activeTab !== "proveedores") return;
     let cancelled = false;
     const query: ProveedorQuery = { pagina: pPagina, limite: PROV_PAGE_SIZE };
+    if (pDebouncedSearch) query.q = pDebouncedSearch;
+    if (pActivo) query.activo = pActivo;
     comprasApi
       .listProveedores(query)
       .then((res) => {
@@ -846,7 +963,7 @@ export default function ComprasPage() {
     return () => {
       cancelled = true;
     };
-  }, [canRead, activeTab, pPagina, pReload]);
+  }, [canRead, activeTab, pPagina, pReload, pDebouncedSearch, pActivo]);
 
   // Los spinners se activan en los handlers, no dentro de los efectos, para no
   // encadenar renders. El estado inicial ya arranca en `true`.
@@ -871,6 +988,15 @@ export default function ComprasPage() {
     setPPagina(page);
   }, []);
 
+  const filtrarProveedoresActivos = useCallback(
+    (value: "" | "true" | "false") => {
+      setPLoading(true);
+      setPActivo(value);
+      setPPagina(1);
+    },
+    [],
+  );
+
   const recargarProveedores = useCallback(() => {
     setPLoading(true);
     setPReload((k) => k + 1);
@@ -881,10 +1007,14 @@ export default function ComprasPage() {
   const openNewOrder = useCallback(async () => {
     setShowNewOrder(true);
     try {
-      const res = await comprasApi.listProveedores({ limite: 200 });
+      const res = await comprasApi.listProveedores({
+        limite: 100,
+        activo: "true",
+      });
       setOrderProvs(res.data);
     } catch {
       setOrderProvs([]);
+      toast.error("No se pudieron cargar los proveedores activos.");
     }
   }, []);
 
@@ -895,13 +1025,6 @@ export default function ComprasPage() {
       </div>
     );
   }
-
-  // KPIs de la pagina actual de ordenes
-  const pagePendientes = ordenes.filter((o) => o.estado === "PENDIENTE").length;
-  const pageRecibidas = ordenes.filter((o) => o.estado === "RECIBIDA").length;
-  const pageMontoPend = ordenes
-    .filter((o) => o.estado === "PENDIENTE")
-    .reduce((s, o) => s + o.total, 0);
 
   return (
     <div
@@ -942,22 +1065,22 @@ export default function ComprasPage() {
           {[
             {
               label: "TOTAL ORDENES",
-              value: String(oTotal),
+              value: String(resumen.totalOrdenes),
               color: "text-foreground",
             },
             {
-              label: "PENDIENTES (PÁGINA)",
-              value: String(pagePendientes),
+              label: "PENDIENTES",
+              value: String(resumen.pendientes),
               color: "text-amber-500",
             },
             {
-              label: "RECIBIDAS (PÁGINA)",
-              value: String(pageRecibidas),
+              label: "RECIBIDAS",
+              value: String(resumen.recibidas),
               color: "text-emerald-400",
             },
             {
-              label: "MONTO PEND. (PÁGINA)",
-              value: fmt(pageMontoPend),
+              label: "MONTO PENDIENTE",
+              value: fmt(resumen.montoPendiente),
               color: "text-amber-500",
             },
           ].map((k) => (
@@ -979,6 +1102,14 @@ export default function ComprasPage() {
             </div>
           ))}
         </div>
+        {resumenError && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-2.5 text-sm text-destructive"
+          >
+            {resumenError}
+          </p>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-6 border-b border-border animate-fade-in-up">
@@ -1144,6 +1275,31 @@ export default function ComprasPage() {
               </p>
             )}
 
+            <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up">
+              <input
+                type="search"
+                value={pSearch}
+                onChange={(e) => setPSearch(e.target.value)}
+                placeholder="Buscar por nombre o contacto..."
+                aria-label="Buscar proveedores"
+                className="h-10 flex-1 px-3 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:border-amber-500/50 transition-all"
+              />
+              <select
+                value={pActivo}
+                onChange={(e) =>
+                  filtrarProveedoresActivos(
+                    e.target.value as "" | "true" | "false",
+                  )
+                }
+                aria-label="Filtrar proveedores por estado"
+                className="h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/50 transition-all sm:w-48"
+              >
+                <option value="">Todos los estados</option>
+                <option value="true">Activos</option>
+                <option value="false">Inactivos</option>
+              </select>
+            </div>
+
             <Bones
               name="compras-proveedores"
               loading={pLoading}
@@ -1153,7 +1309,7 @@ export default function ComprasPage() {
                 <EmptyState
                   icon={<Truck size={22} />}
                   title="Sin proveedores"
-                  description="Crea tu primer proveedor."
+                  description="No hay proveedores con los filtros aplicados."
                 />
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
@@ -1218,6 +1374,14 @@ export default function ComprasPage() {
                           </p>
                         </div>
                       </div>
+                      {canEdit && (
+                        <button
+                          onClick={() => setEditingProveedor(prov)}
+                          className="w-full mt-3 px-3 py-2 rounded-lg bg-muted/60 border border-border text-foreground text-xs font-medium hover:bg-muted transition-colors"
+                        >
+                          Editar
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1246,12 +1410,19 @@ export default function ComprasPage() {
         />
       )}
       {showNewProv && (
-        <NewProveedorModal
+        <ProveedorModal
           onClose={() => setShowNewProv(false)}
-          onCreated={() => {
+          onSaved={() => {
             setPPagina(1);
             recargarProveedores();
           }}
+        />
+      )}
+      {editingProveedor && (
+        <ProveedorModal
+          proveedor={editingProveedor}
+          onClose={() => setEditingProveedor(null)}
+          onSaved={recargarProveedores}
         />
       )}
       {selectedOrder && (

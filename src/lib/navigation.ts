@@ -4,9 +4,8 @@
  * Se declara aqui una vez y lo consumen el sidebar, el header y el bottom-nav
  * movil. Anadir una ruta en un solo sitio evita que los tres se desincronicen.
  *
- * REGLA: aqui solo entran rutas que tengan un modulo real en el backend
- * NestJS. Las pantallas de demo sin API detras se eliminaron del proyecto;
- * si vuelve a hacer falta alguna, primero se construye su controller.
+ * Las rutas operativas consumen modulos reales del backend. Ventas se mantiene
+ * como excepcion informativa y no ejecuta acciones hasta que exista su API.
  */
 import {
   LayoutDashboard,
@@ -18,6 +17,15 @@ import {
   Settings,
   User,
   Tags,
+  BarChart3,
+  ClipboardList,
+  FileText,
+  Landmark,
+  Package,
+  ShieldCheck,
+  ShoppingCart,
+  Truck,
+  UtensilsCrossed,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -44,6 +52,33 @@ export const NAV_ROOT: NavItem = {
 
 export const NAV_MODULES: NavModule[] = [
   {
+    id: 'operaciones',
+    label: 'Operaciones',
+    icon: BarChart3,
+    items: [
+      { name: 'Caja', href: '/caja', icon: Landmark },
+      { name: 'Ventas', href: '/ventas', icon: ShoppingCart },
+    ],
+  },
+  {
+    id: 'inventario',
+    label: 'Inventario',
+    icon: Package,
+    items: [
+      { name: 'Productos', href: '/productos', icon: UtensilsCrossed },
+      { name: 'Categorías', href: '/categorias', icon: Tags },
+      { name: 'Inventario', href: '/inventario', icon: Package },
+      { name: 'Kardex', href: '/kardex', icon: FileText },
+      { name: 'Compras', href: '/compras', icon: Truck },
+    ],
+  },
+  {
+    id: 'personal',
+    label: 'Personal',
+    icon: ClipboardList,
+    items: [{ name: 'Asistencia', href: '/asistencia', icon: ClipboardList }],
+  },
+  {
     id: 'admin',
     label: 'Administración',
     icon: Settings,
@@ -53,6 +88,7 @@ export const NAV_MODULES: NavModule[] = [
       { name: 'Roles', href: '/roles', icon: Shield },
       { name: 'Permisos', href: '/permisos', icon: KeySquare },
       { name: 'Auditoría', href: '/auditoria', icon: ScrollText },
+      { name: 'Seguridad', href: '/seguridad', icon: ShieldCheck },
     ],
   },
 ];
@@ -60,7 +96,6 @@ export const NAV_MODULES: NavModule[] = [
 /** Rutas accesibles que no aparecen en el sidebar. */
 const NAV_HIDDEN: NavItem[] = [
   { name: 'Perfil', href: '/perfil', icon: User },
-  { name: 'Categorías', href: '/categorias', icon: Tags },
 ];
 
 /** Indice plano href → NavItem. Se construye una sola vez al importar. */

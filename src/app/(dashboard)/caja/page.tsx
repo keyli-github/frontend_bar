@@ -5,14 +5,18 @@ import {
   ArrowDown,
   ArrowUp,
   Calculator,
+  Eye,
+  History,
   Landmark,
   LockKeyhole,
   PlusCircle,
   RefreshCw,
-  X,
 } from "lucide-react";
-import { ApiError } from "@/lib/api";
-import * as cajaApi from "@/lib/api/caja.api";
+import { toast } from "sonner";
+import { Bone, Bones, BoneTable } from "@/components/shared/bones";
+import { ModalShell } from "@/components/shared/modal-shell";
+import { Pagination } from "@/components/shared/pagination";
+import { ApiError, cajaApi } from "@/lib/api";
 import { listEstablecimientos } from "@/lib/api/establecimientos.api";
 import { formatCurrency } from "@/lib/format";
 import { hasPermission } from "@/lib/roles";
@@ -21,14 +25,20 @@ import { useAuthStore } from "@/store/auth-store";
 import type { Establecimiento } from "@/types/api";
 import {
   CAJA_DENOMINACIONES,
+  type CajaDetalle,
+  type CajaEstado,
   type CajaMedioPago,
   type CajaMovimiento,
   type CajaMovimientoTipo,
   type CajaSesion,
+  type CajaSesionHistorial,
 } from "@/types/caja";
 
 type ArqueoMode = "precuadre" | "cierre";
 type MovimientoMode = "entrada" | "salida";
+type CajaTab = "actual" | "historial";
+const HISTORY_PAGE_SIZE = 10;
+const DETAIL_MOVEMENTS_PAGE_SIZE = 10;
 const FIELD_CLASS =
   "h-10 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground outline-none focus:border-amber-500/60";
 
@@ -65,6 +75,29 @@ export default function CajaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<CajaTab>("actual");
+
+  const [historyRows, setHistoryRows] = useState<CajaSesionHistorial[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [historyEstado, setHistoryEstado] = useState<"" | CajaEstado>("");
+  const [historySedeId, setHistorySedeId] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const [selectedCajaId, setSelectedCajaId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<CajaDetalle | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailMovimientos, setDetailMovimientos] = useState<CajaMovimiento[]>([]);
+  const [detailMovPage, setDetailMovPage] = useState(1);
+  const [detailMovTotal, setDetailMovTotal] = useState(0);
+  const [detailMovTotalPages, setDetailMovTotalPages] = useState(1);
+  const [detailMovTipo, setDetailMovTipo] =
+    useState<"" | CajaMovimientoTipo>("");
+  const [detailMovLoading, setDetailMovLoading] = useState(false);
+  const [detailMovError, setDetailMovError] = useState<string | null>(null);
 
   const [denominationCounts, setDenominationCounts] = useState(
     emptyDenominationCounts,
@@ -81,6 +114,9 @@ export default function CajaPage() {
   const [montoDeclarado, setMontoDeclarado] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const loadRequestId = useRef(0);
+  const historyRequestId = useRef(0);
+  const detailRequestId = useRef(0);
+  const detailMovRequestId = useRef(0);
   const montoApertura = CAJA_DENOMINACIONES.reduce(
     (total, denominacion) =>
       total + denominacion * Number(denominationCounts[String(denominacion)] || 0),
@@ -154,6 +190,158 @@ export default function CajaPage() {
     };
   }, [loadCaja]);
 
+  const loadHistory = useCallback(async () => {
+    const requestId = ++historyRequestId.current;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const page = await cajaApi.getCajaHistorial({
+        pagina: historyPage,
+        limite: HISTORY_PAGE_SIZE,
+        estado: historyEstado || undefined,
+        sedeId:
+          isSuperadmin && historySedeId ? historySedeId : undefined,
+      });
+      if (requestId !== historyRequestId.current) return;
+      setHistoryRows(page.data);
+      setHistoryTotal(page.total);
+      setHistoryTotalPages(page.totalPaginas || 1);
+      setHistoryError(null);
+    } catch (reason) {
+      if (requestId !== historyRequestId.current) return;
+      setHistoryRows([]);
+      setHistoryTotal(0);
+      setHistoryTotalPages(1);
+      setHistoryError(
+        errorMessage(reason, "No se pudo cargar el historial de caja."),
+      );
+    } finally {
+      if (requestId === historyRequestId.current) {
+        setHistoryLoading(false);
+      }
+    }
+  }, [historyEstado, historyPage, historySedeId, isSuperadmin]);
+
+  useEffect(() => {
+    if (activeTab !== "historial") return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) return loadHistory();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, loadHistory]);
+
+  const openHistoryDetail = async (cajaId: string) => {
+    const requestId = ++detailRequestId.current;
+    const movementsRequestId = ++detailMovRequestId.current;
+    setSelectedCajaId(cajaId);
+    setDetail(null);
+    setDetailMovimientos([]);
+    setDetailMovTotal(0);
+    setDetailMovTotalPages(1);
+    setDetailMovPage(1);
+    setDetailMovTipo("");
+    setDetailLoading(true);
+    setDetailMovLoading(true);
+    setDetailError(null);
+    setDetailMovError(null);
+    try {
+      const [sessionResult, movementsResult] = await Promise.allSettled([
+        cajaApi.getCajaDetalle(cajaId),
+        cajaApi.listMovimientosCaja(cajaId, {
+          pagina: 1,
+          limite: DETAIL_MOVEMENTS_PAGE_SIZE,
+        }),
+      ]);
+      if (requestId !== detailRequestId.current) return;
+
+      if (sessionResult.status === "fulfilled") {
+        setDetail(sessionResult.value);
+      } else {
+        setDetailError(
+          errorMessage(
+            sessionResult.reason,
+            "No se pudo cargar el detalle de caja.",
+          ),
+        );
+      }
+      if (
+        movementsRequestId === detailMovRequestId.current &&
+        movementsResult.status === "fulfilled"
+      ) {
+        setDetailMovimientos(movementsResult.value.data);
+        setDetailMovTotal(movementsResult.value.total);
+        setDetailMovTotalPages(movementsResult.value.totalPaginas || 1);
+        setDetailMovError(null);
+      } else if (
+        movementsRequestId === detailMovRequestId.current &&
+        movementsResult.status === "rejected"
+      ) {
+        setDetailMovError(
+          errorMessage(
+            movementsResult.reason,
+            "No se pudieron cargar los movimientos.",
+          ),
+        );
+      }
+    } catch (reason) {
+      if (requestId !== detailRequestId.current) return;
+      setDetailError(
+        errorMessage(reason, "No se pudo cargar el detalle de caja."),
+      );
+    } finally {
+      if (requestId === detailRequestId.current) setDetailLoading(false);
+      if (movementsRequestId === detailMovRequestId.current) {
+        setDetailMovLoading(false);
+      }
+    }
+  };
+
+  const loadDetailMovimientos = async (
+    page: number,
+    tipo: "" | CajaMovimientoTipo,
+  ) => {
+    if (!selectedCajaId) return;
+    const requestId = ++detailMovRequestId.current;
+    setDetailMovLoading(true);
+    setDetailMovError(null);
+    try {
+      const result = await cajaApi.listMovimientosCaja(selectedCajaId, {
+        pagina: page,
+        limite: DETAIL_MOVEMENTS_PAGE_SIZE,
+        tipo: tipo || undefined,
+      });
+      if (requestId !== detailMovRequestId.current) return;
+      setDetailMovimientos(result.data);
+      setDetailMovTotal(result.total);
+      setDetailMovTotalPages(result.totalPaginas || 1);
+      setDetailMovError(null);
+    } catch (reason) {
+      if (requestId !== detailMovRequestId.current) return;
+      setDetailMovimientos([]);
+      setDetailMovTotal(0);
+      setDetailMovTotalPages(1);
+      setDetailMovError(
+        errorMessage(reason, "No se pudieron cargar los movimientos."),
+      );
+    } finally {
+      if (requestId === detailMovRequestId.current) {
+        setDetailMovLoading(false);
+      }
+    }
+  };
+
+  const closeHistoryDetail = () => {
+    detailRequestId.current += 1;
+    detailMovRequestId.current += 1;
+    setSelectedCajaId(null);
+    setDetail(null);
+    setDetailError(null);
+    setDetailMovError(null);
+  };
+
   const abrir = async () => {
     const denominaciones = CAJA_DENOMINACIONES.map((denominacion) => ({
       denominacion,
@@ -174,6 +362,7 @@ export default function CajaPage() {
         denominaciones,
         ...(isSuperadmin ? { sedeId } : {}),
       });
+      toast.success("Caja abierta correctamente");
       setDenominationCounts(emptyDenominationCounts());
       await loadCaja();
     } catch (reason) {
@@ -217,7 +406,7 @@ export default function CajaPage() {
         tipo,
         origen:
           movimientoMode === "entrada"
-            ? "VENTA"
+            ? "MANUAL"
             : digital
               ? "PAGO_NO_EFECTIVO"
               : "MANUAL",
@@ -227,6 +416,11 @@ export default function CajaPage() {
         referencia: referencia.trim() || undefined,
         comprobante: comprobante.trim() || undefined,
       });
+      toast.success(
+        movimientoMode === "entrada"
+          ? "Entrada registrada"
+          : "Salida registrada",
+      );
       setShowMovimiento(false);
       setConcepto("");
       setMontoMovimiento("");
@@ -257,11 +451,13 @@ export default function CajaPage() {
     try {
       if (arqueoMode === "precuadre") {
         await cajaApi.precuadrarCaja(caja.id, { montoDeclarado: monto });
+        toast.success("Precuadre guardado");
       } else {
         await cajaApi.cerrarCaja(caja.id, {
           montoDeclarado: monto,
           observaciones: observaciones.trim() || undefined,
         });
+        toast.success("Caja cerrada correctamente");
       }
       setArqueoMode(null);
       setMontoDeclarado("");
@@ -293,7 +489,7 @@ export default function CajaPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isSuperadmin && (
+            {isSuperadmin && activeTab === "actual" && (
               <select
                 value={sedeId}
                 onChange={(event) => setSedeId(event.target.value)}
@@ -308,16 +504,69 @@ export default function CajaPage() {
             )}
             <button
               type="button"
-              onClick={() => void loadCaja()}
-              disabled={loading || !effectiveSedeId}
+              onClick={() =>
+                void (activeTab === "actual" ? loadCaja() : loadHistory())
+              }
+              disabled={
+                activeTab === "actual"
+                  ? loading || !effectiveSedeId
+                  : historyLoading
+              }
               className="grid size-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground disabled:opacity-50"
-              aria-label="Actualizar caja"
+              aria-label={
+                activeTab === "actual"
+                  ? "Actualizar caja actual"
+                  : "Actualizar historial"
+              }
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw
+                size={16}
+                className={
+                  (activeTab === "actual" ? loading : historyLoading)
+                    ? "animate-spin"
+                    : ""
+                }
+              />
             </button>
           </div>
         </header>
 
+        <div
+          className="inline-flex rounded-xl border border-border bg-card p-1"
+          role="tablist"
+          aria-label="Vistas de caja"
+        >
+          {(
+            [
+              ["actual", "Caja actual", Landmark],
+              ["historial", "Historial", History],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === value}
+              onClick={() => setActiveTab(value)}
+              className={cn(
+                "flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors",
+                activeTab === value
+                  ? "bg-amber-500 text-black"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "actual" && (
+          <Bones
+            name="caja-actual"
+            loading={loading}
+            placeholder={<CajaCurrentSkeleton />}
+          >
+            <div className="space-y-5">
         {error && (
           <p
             role="alert"
@@ -585,10 +834,213 @@ export default function CajaPage() {
             </section>
           </>
         )}
+            </div>
+          </Bones>
+        )}
+
+        {activeTab === "historial" && (
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-foreground">
+                  Sesiones de caja
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Consulta sesiones abiertas y cerradas registradas por el backend.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {isSuperadmin && (
+                  <Field label="Sede">
+                    <select
+                      value={historySedeId}
+                      onChange={(event) => {
+                        setHistorySedeId(event.target.value);
+                        setHistoryPage(1);
+                        setHistoryLoading(true);
+                      }}
+                      className={cn(FIELD_CLASS, "sm:w-52")}
+                    >
+                      <option value="">Todas las sedes</option>
+                      {sedes.map((sede) => (
+                        <option key={sede.id} value={sede.id}>
+                          {sede.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <Field label="Estado">
+                  <select
+                    value={historyEstado}
+                    onChange={(event) => {
+                      setHistoryEstado(event.target.value as "" | CajaEstado);
+                      setHistoryPage(1);
+                      setHistoryLoading(true);
+                    }}
+                    className={cn(FIELD_CLASS, "sm:w-44")}
+                  >
+                    <option value="">Todos</option>
+                    <option value="ABIERTA">Abierta</option>
+                    <option value="CERRADA">Cerrada</option>
+                  </select>
+                </Field>
+              </div>
+            </div>
+
+            {historyError && (
+              <p
+                role="alert"
+                className="m-4 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {historyError}
+              </p>
+            )}
+
+            <Bones
+              name="caja-historial"
+              loading={historyLoading}
+              placeholder={<BoneTable rows={HISTORY_PAGE_SIZE} cols={7} />}
+            >
+              {historyError ? null : historyRows.length === 0 ? (
+                <div className="flex flex-col items-center px-4 py-14 text-center">
+                  <History size={24} className="text-muted-foreground" />
+                  <p className="mt-3 text-sm font-semibold text-foreground">
+                    No hay sesiones de caja
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No existen resultados para los filtros seleccionados.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {[
+                          "Apertura",
+                          "Sede",
+                          "Estado",
+                          "Responsable",
+                          "Monto apertura",
+                          "Cierre",
+                          "",
+                        ].map((heading, index) => (
+                          <th
+                            key={`${heading}-${index}`}
+                            className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                          >
+                            {heading}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {historyRows.map((session) => (
+                        <tr key={session.id} className="hover:bg-muted/30">
+                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                            {formatDateTime(session.abiertaAt)}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-foreground">
+                            {session.sede.nombre}
+                          </td>
+                          <td className="px-4 py-3">
+                            <CajaStatus estado={session.estado} />
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {session.usuarioApertura.username}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-semibold text-foreground">
+                            {formatCurrency(session.montoApertura)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                            {session.cerradaAt
+                              ? formatDateTime(session.cerradaAt)
+                              : "Pendiente"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => void openHistoryDetail(session.id)}
+                              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:border-amber-500/40 hover:bg-amber-500/10"
+                              aria-label={`Ver detalle de caja de ${session.sede.nombre}`}
+                            >
+                              <Eye size={14} /> Ver detalle
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Bones>
+
+            <div className="border-t border-border px-4">
+              <Pagination
+                page={historyPage}
+                totalPages={historyTotalPages}
+                total={historyTotal}
+                pageSize={HISTORY_PAGE_SIZE}
+                onPageChange={(page) => {
+                  setHistoryLoading(true);
+                  setHistoryPage(page);
+                }}
+              />
+            </div>
+          </section>
+        )}
       </div>
 
+      <ModalShell
+        open={Boolean(selectedCajaId)}
+        title="Detalle de sesión de caja"
+        subtitle={selectedCajaId ? `Sesión ${selectedCajaId}` : undefined}
+        onClose={closeHistoryDetail}
+        className="max-w-6xl"
+      >
+        {detailError && (
+          <p
+            role="alert"
+            className="mb-4 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {detailError}
+          </p>
+        )}
+        <Bones
+          name="caja-detalle"
+          loading={detailLoading}
+          placeholder={<CajaDetailSkeleton />}
+        >
+          {detail ? (
+            <CajaDetailView
+              detail={detail}
+              movimientos={detailMovimientos}
+              movementsLoading={detailMovLoading}
+              movementError={detailMovError}
+              movementType={detailMovTipo}
+              movementPage={detailMovPage}
+              movementTotal={detailMovTotal}
+              movementTotalPages={detailMovTotalPages}
+              onMovementTypeChange={(tipo) => {
+                setDetailMovTipo(tipo);
+                setDetailMovPage(1);
+                void loadDetailMovimientos(1, tipo);
+              }}
+              onMovementPageChange={(page) => {
+                setDetailMovPage(page);
+                void loadDetailMovimientos(page, detailMovTipo);
+              }}
+            />
+          ) : (
+            !detailError && null
+          )}
+        </Bones>
+      </ModalShell>
+
       {showMovimiento && caja && (
-        <Modal
+        <ModalShell
+          open
           title={`REGISTRAR ${movimientoMode.toUpperCase()}`}
           onClose={() => !saving && setShowMovimiento(false)}
         >
@@ -606,7 +1058,7 @@ export default function CajaPage() {
                 className={FIELD_CLASS}
                 placeholder={
                   movimientoMode === "entrada"
-                    ? "Ej. venta mesa 4"
+                    ? "Ej. aporte o ajuste manual"
                     : "Ej. pago Yape de venta o compra de hielo"
                 }
               />
@@ -689,11 +1141,12 @@ export default function CajaPage() {
                 : `REGISTRAR ${movimientoMode.toUpperCase()}`}
             </button>
           </div>
-        </Modal>
+        </ModalShell>
       )}
 
       {arqueoMode && caja && (
-        <Modal
+        <ModalShell
+          open
           title={
             arqueoMode === "precuadre" ? "PRECUADRE DE CAJA" : "CIERRE DE CAJA"
           }
@@ -748,44 +1201,388 @@ export default function CajaPage() {
                   : "GUARDAR PRECUADRE"}
             </button>
           </div>
-        </Modal>
+        </ModalShell>
       )}
     </div>
   );
 }
 
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
+function CajaCurrentSkeleton() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-        aria-label="Cerrar"
-      />
-      <div className="relative w-full max-w-md rounded-2xl border border-border bg-popover p-6 shadow-2xl">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="font-bold text-foreground">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X size={19} />
-          </button>
-        </div>
-        {children}
+    <div className="space-y-5" aria-label="Cargando caja actual" role="status">
+      <div className="rounded-xl border border-border bg-card p-4">
+        <Bone className="h-4 w-32" />
+        <Bone className="mt-2 h-3 w-64" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="rounded-xl border border-border bg-card p-4">
+            <Bone className="h-2.5 w-20" />
+            <Bone className="mt-2 h-5 w-28" />
+          </div>
+        ))}
+      </div>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <BoneTable rows={6} cols={7} />
       </div>
     </div>
   );
+}
+
+function CajaDetailSkeleton() {
+  return (
+    <div className="space-y-4" aria-label="Cargando detalle de caja" role="status">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Bone key={index} className="h-20 rounded-xl" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <Bone key={index} className="h-48 rounded-xl" />
+        ))}
+      </div>
+      <Bone className="h-56 rounded-xl" />
+    </div>
+  );
+}
+
+function CajaStatus({ estado }: { estado: CajaEstado }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold",
+        estado === "ABIERTA"
+          ? "bg-emerald-500/10 text-emerald-500"
+          : "bg-muted text-muted-foreground",
+      )}
+    >
+      {estado}
+    </span>
+  );
+}
+
+function CajaDetailView({
+  detail,
+  movimientos,
+  movementsLoading,
+  movementError,
+  movementType,
+  movementPage,
+  movementTotal,
+  movementTotalPages,
+  onMovementTypeChange,
+  onMovementPageChange,
+}: {
+  detail: CajaDetalle;
+  movimientos: CajaMovimiento[];
+  movementsLoading: boolean;
+  movementError: string | null;
+  movementType: "" | CajaMovimientoTipo;
+  movementPage: number;
+  movementTotal: number;
+  movementTotalPages: number;
+  onMovementTypeChange: (tipo: "" | CajaMovimientoTipo) => void;
+  onMovementPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          ["Apertura", detail.montoApertura, "text-foreground"],
+          ["Entradas", detail.resumen.totalEntradas, "text-emerald-500"],
+          ["Salidas", detail.resumen.totalSalidas, "text-red-500"],
+          ["Saldo esperado", detail.resumen.saldoEsperado, "text-amber-500"],
+        ].map(([label, amount, tone]) => (
+          <div key={String(label)} className="rounded-xl border border-border bg-card p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {label}
+            </p>
+            <p className={cn("mt-1 font-mono text-lg font-bold", tone)}>
+              {formatCurrency(Number(amount))}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <DetailSection title="Apertura">
+          <DetailValue label="Sede" value={detail.sede.nombre} />
+          <DetailValue label="Estado" value={<CajaStatus estado={detail.estado} />} />
+          <DetailValue label="Fecha" value={formatDateTime(detail.abiertaAt)} />
+          <DetailValue label="Usuario" value={detail.usuarioApertura.username} />
+          <DetailValue label="Monto" value={formatCurrency(detail.montoApertura)} />
+          <DetailValue label="Creada" value={formatDateTime(detail.createdAt)} />
+          <DetailValue label="Actualizada" value={formatDateTime(detail.updatedAt)} />
+        </DetailSection>
+
+        <DetailSection title="Precuadre">
+          <DetailValue
+            label="Fecha"
+            value={detail.precuadreAt ? formatDateTime(detail.precuadreAt) : "No realizado"}
+          />
+          <DetailValue
+            label="Usuario"
+            value={detail.usuarioPrecuadre?.username ?? "No registrado"}
+          />
+          <DetailValue
+            label="Declarado"
+            value={formatNullableCurrency(detail.montoDeclaradoPrecuadre)}
+          />
+          <DetailValue
+            label="Esperado"
+            value={formatNullableCurrency(detail.saldoEsperadoPrecuadre)}
+          />
+          <DetailValue
+            label="Diferencia"
+            value={formatNullableCurrency(detail.diferenciaPrecuadre)}
+          />
+        </DetailSection>
+
+        <DetailSection title="Cierre">
+          <DetailValue
+            label="Fecha"
+            value={detail.cerradaAt ? formatDateTime(detail.cerradaAt) : "Caja aún abierta"}
+          />
+          <DetailValue
+            label="Usuario"
+            value={detail.usuarioCierre?.username ?? "No registrado"}
+          />
+          <DetailValue
+            label="Declarado"
+            value={formatNullableCurrency(detail.montoDeclaradoCierre)}
+          />
+          <DetailValue
+            label="Esperado"
+            value={formatNullableCurrency(detail.saldoEsperadoCierre)}
+          />
+          <DetailValue
+            label="Diferencia"
+            value={formatNullableCurrency(detail.diferenciaCierre)}
+          />
+          <DetailValue
+            label="Observaciones"
+            value={detail.observacionesCierre || "Sin observaciones"}
+            full
+          />
+        </DetailSection>
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-4 py-3">
+          <h3 className="text-sm font-semibold text-foreground">
+            Denominaciones de apertura
+          </h3>
+        </div>
+        {detail.denominaciones.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No se registraron denominaciones.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3">Denominación</th>
+                  <th className="px-4 py-3">Cantidad</th>
+                  <th className="px-4 py-3 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {detail.denominaciones.map((item) => (
+                  <tr key={item.denominacion}>
+                    <td className="px-4 py-3 font-mono text-foreground">
+                      {formatCurrency(item.denominacion)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {item.cantidad}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-foreground">
+                      {formatCurrency(item.subtotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Movimientos</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {movementTotal} registros encontrados
+            </p>
+          </div>
+          <Field label="Tipo">
+            <select
+              value={movementType}
+              onChange={(event) =>
+                onMovementTypeChange(
+                  event.target.value as "" | CajaMovimientoTipo,
+                )
+              }
+              className={cn(FIELD_CLASS, "sm:w-40")}
+            >
+              <option value="">Todos</option>
+              <option value="ENTRADA">Entrada</option>
+              <option value="SALIDA">Salida</option>
+            </select>
+          </Field>
+        </div>
+
+        <Bones
+          name="caja-detalle-movimientos"
+          loading={movementsLoading}
+          placeholder={<BoneTable rows={DETAIL_MOVEMENTS_PAGE_SIZE} cols={9} />}
+        >
+          {movementError ? (
+            <p
+              role="alert"
+              className="m-4 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {movementError}
+            </p>
+          ) : movimientos.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              No hay movimientos para este filtro.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px] text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    {[
+                      "Fecha",
+                      "Tipo",
+                      "Origen",
+                      "Concepto",
+                      "Medio",
+                      "Monto",
+                      "Referencia",
+                      "Comprobante",
+                      "Usuario",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {movimientos.map((movimiento) => (
+                    <tr key={movimiento.id} className="hover:bg-muted/30">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                        {formatDateTime(movimiento.createdAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            "text-xs font-semibold",
+                            movimiento.tipo === "ENTRADA"
+                              ? "text-emerald-500"
+                              : "text-red-500",
+                          )}
+                        >
+                          {movimiento.tipo}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {movimiento.origen}
+                      </td>
+                      <td className="max-w-56 px-4 py-3 text-foreground">
+                        {movimiento.concepto}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {movimiento.medioPago}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-4 py-3 font-mono font-semibold",
+                          movimiento.tipo === "ENTRADA"
+                            ? "text-emerald-500"
+                            : "text-red-500",
+                        )}
+                      >
+                        {movimiento.tipo === "ENTRADA" ? "+" : "-"}
+                        {formatCurrency(movimiento.monto)}
+                      </td>
+                      <td className="max-w-40 truncate px-4 py-3 text-xs text-muted-foreground">
+                        {movimiento.referencia ?? "Sin referencia"}
+                      </td>
+                      <td className="max-w-40 truncate px-4 py-3 text-xs text-muted-foreground">
+                        {movimiento.comprobante ?? "Sin comprobante"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {movimiento.usuario?.username ?? "Sistema"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Bones>
+
+        <div className="border-t border-border px-4">
+          <Pagination
+            page={movementPage}
+            totalPages={movementTotalPages}
+            total={movementTotal}
+            pageSize={DETAIL_MOVEMENTS_PAGE_SIZE}
+            onPageChange={onMovementPageChange}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card p-4">
+      <h3 className="border-b border-border pb-3 text-sm font-semibold text-foreground">
+        {title}
+      </h3>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">{children}</dl>
+    </section>
+  );
+}
+
+function DetailValue({
+  label,
+  value,
+  full = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  full?: boolean;
+}) {
+  return (
+    <div className={full ? "col-span-2" : undefined}>
+      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="mt-1 break-words text-sm font-medium text-foreground">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function formatNullableCurrency(value: number | null): string {
+  return value === null ? "No registrado" : formatCurrency(value);
 }
 
 function Field({

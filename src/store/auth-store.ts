@@ -188,9 +188,6 @@ export const useAuthStore = create<AuthState>()(
         // Evita relanzarlo si ya hay una restauracion en curso o resuelta.
         if (get().status !== "idle") return;
 
-        // Si ya está autenticado en modo demo, no intentar refresh.
-        if (get().isAuthenticated && get().user) return;
-
         if (!getRefreshToken()) {
           set(LOGGED_OUT);
           return;
@@ -244,7 +241,7 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "barbeer-auth",
       /**
-       * v1 (mock) guardaba `{ user, isAuthenticated: true }` en esta misma
+       * v1 guardaba `{ user, isAuthenticated: true }` en esta misma
        * clave. Al rehidratar, zustand fusiona TODO lo que encuentre en
        * storage, asi que un navegador con el estado antiguo arrancaria con
        * `isAuthenticated: true` y un usuario falso — saltandose el guard hasta

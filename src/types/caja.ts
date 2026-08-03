@@ -31,11 +31,10 @@ export interface CajaDenominacion {
   subtotal: number;
 }
 
-export interface CajaSesion {
+export interface CajaSesionBase {
   id: string;
   sedeId: string;
-  /** Relacion incluida por la API actual; opcional para tolerar respuestas antiguas. */
-  sede?: CajaSedeRef | null;
+  sede: CajaSedeRef;
   estado: CajaEstado;
   montoApertura: number;
   denominaciones: CajaDenominacion[];
@@ -54,7 +53,29 @@ export interface CajaSesion {
   observacionesCierre: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Fila de `GET /caja/historial`; el listado no calcula el resumen. */
+export type CajaSesionHistorial = CajaSesionBase;
+
+/** Respuesta detallada de caja, incluida la sesion actual. */
+export interface CajaSesion extends CajaSesionBase {
   resumen: CajaResumen;
+}
+
+export type CajaDetalle = CajaSesion;
+
+export interface CajaHistorialQuery {
+  pagina?: number;
+  limite?: number;
+  sedeId?: string;
+  estado?: CajaEstado;
+}
+
+export interface CajaMovimientosQuery {
+  pagina?: number;
+  limite?: number;
+  tipo?: CajaMovimientoTipo;
 }
 
 export interface CajaMovimiento {

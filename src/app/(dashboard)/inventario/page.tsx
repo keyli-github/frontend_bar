@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -13,16 +14,31 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Bones, BoneKpis, BoneTable } from "@/components/shared/bones";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
 import { useAuthStore } from "@/store/auth-store";
-import { categoriasApi, inventarioApi, ApiError } from "@/lib/api";
+import {
+  categoriasApi,
+  establecimientosApi,
+  inventarioApi,
+  productosApi,
+  ApiError,
+} from "@/lib/api";
 import { hasPermission } from "@/lib/roles";
 import { formatCurrency } from "@/lib/format";
 import type {
   Categoria,
+  Establecimiento,
   InventarioItem,
   InventarioQuery,
   InventarioResumen,
+  Producto,
 } from "@/types/api";
-import { Plus, X, ArrowUp, ArrowDown, Package } from "lucide-react";
+import {
+  Plus,
+  X,
+  ArrowUp,
+  ArrowDown,
+  Package,
+  Settings2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
@@ -59,11 +75,23 @@ function StockBar({
 export default function InventarioPage() {
   const router = useRouter();
   const permisos = useAuthStore((state) => state.permisos);
+  const user = useAuthStore((state) => state.user);
   const boneyardBuild = useBoneyardBuild();
   const canRead = boneyardBuild || hasPermission(permisos, "inventario:leer");
   const canEdit = hasPermission(permisos, "inventario:editar");
   const canCreateProduct = hasPermission(permisos, "productos:crear");
+  const canConfigure = hasPermission(permisos, "inventario:crear");
+  const canReadProducts = hasPermission(permisos, "productos:leer");
+  const canReadEstablishments = hasPermission(
+    permisos,
+    "establecimientos:leer",
+  );
   const canReadCategories = hasPermission(permisos, "categorias:leer");
+  const isSuperadmin = user?.rol === "SUPERADMIN";
+  const canCreateConfig =
+    canConfigure &&
+    canReadProducts &&
+    (!isSuperadmin || canReadEstablishments);
 
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [selectedCat, setSelectedCat] = useState("Todos");
@@ -81,10 +109,28 @@ export default function InventarioPage() {
 
   // Modal de ajuste
   const [adjustItem, setAdjustItem] = useState<InventarioItem | null>(null);
-  const [adjustType, setAdjustType] = useState<"entrada" | "salida">("entrada");
+  const [adjustType, setAdjustType] = useState<
+    "ENTRADA" | "SALIDA" | "AJUSTE"
+  >("ENTRADA");
   const [adjustQty, setAdjustQty] = useState("");
+  const [adjustReference, setAdjustReference] = useState("");
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [adjustError, setAdjustError] = useState<string | null>(null);
+
+  // Modal de configuración
+  const [configItem, setConfigItem] = useState<InventarioItem | null | undefined>(
+    undefined,
+  );
+  const [products, setProducts] = useState<Producto[]>([]);
+  const [establishments, setEstablishments] = useState<Establecimiento[]>([]);
+  const [configProductId, setConfigProductId] = useState("");
+  const [configSedeId, setConfigSedeId] = useState("");
+  const [configMin, setConfigMin] = useState("0");
+  const [configMax, setConfigMax] = useState("0");
+  const [configLocation, setConfigLocation] = useState("");
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canReadCategories) return;
@@ -146,6 +192,73 @@ export default function InventarioPage() {
     };
   }, [canRead, pagina, debouncedSearch, selectedCat, reloadKey]);
 
+  useEffect(() => {
+    if (configItem === undefined) return;
+    if (configItem) return;
+    if (!canCreateConfig) return;
+    let cancelled = false;
+
+    const loadProducts = async () => {
+      const first = await productosApi.listProductos({
+        pagina: 1,
+        limite: 100,
+        activo: "true",
+      });
+      if (first.totalPaginas <= 1) return first.data;
+      const rest = await Promise.all(
+        Array.from({ length: first.totalPaginas - 1 }, (_, index) =>
+          productosApi.listProductos({
+            pagina: index + 2,
+            limite: 100,
+            activo: "true",
+          }),
+        ),
+      );
+      return [...first.data, ...rest.flatMap((page) => page.data)];
+    };
+
+    const loadEstablishments = async () => {
+      if (!isSuperadmin) return [];
+      const first = await establecimientosApi.listEstablecimientos({
+        pagina: 1,
+        limite: 100,
+      });
+      if (first.totalPaginas <= 1) return first.data;
+      const rest = await Promise.all(
+        Array.from({ length: first.totalPaginas - 1 }, (_, index) =>
+          establecimientosApi.listEstablecimientos({
+            pagina: index + 2,
+            limite: 100,
+          }),
+        ),
+      );
+      return [...first.data, ...rest.flatMap((page) => page.data)];
+    };
+
+    Promise.all([loadProducts(), loadEstablishments()])
+      .then(([productRows, establishmentRows]) => {
+        if (cancelled) return;
+        setProducts(productRows);
+        setEstablishments(establishmentRows.filter((sede) => sede.activo));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message = errorMessage(
+          err,
+          "No se pudieron cargar los datos para configurar el inventario.",
+        );
+        setConfigError(message);
+        toast.error(message);
+      })
+      .finally(() => {
+        if (!cancelled) setConfigLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canCreateConfig, configItem, isSuperadmin]);
+
   /** El spinner se activa aqui, no en el efecto, para no encadenar renders. */
   const irAPagina = useCallback((page: number) => {
     setLoading(true);
@@ -155,29 +268,119 @@ export default function InventarioPage() {
   const openAdjust = (item: InventarioItem) => {
     setAdjustItem(item);
     setAdjustQty("");
-    setAdjustType("entrada");
+    setAdjustReference("");
+    setAdjustType("ENTRADA");
     setAdjustError(null);
+  };
+
+  const openConfig = (item: InventarioItem | null = null) => {
+    if (!canConfigure || (!item && !canCreateConfig)) return;
+    setProducts([]);
+    setEstablishments([]);
+    setConfigProductId(item?.productoId ?? "");
+    setConfigSedeId(item?.sedeId ?? "");
+    setConfigMin(String(item?.min ?? 0));
+    setConfigMax(String(item?.max ?? 0));
+    setConfigLocation(item?.ubicacion ?? "");
+    setConfigError(null);
+    setConfigLoading(!item);
+    setConfigItem(item);
+  };
+
+  const closeConfig = () => {
+    if (!configSaving) setConfigItem(undefined);
+  };
+
+  const saveConfig = async () => {
+    if (!configProductId) {
+      setConfigError("Selecciona un producto.");
+      return;
+    }
+    if (isSuperadmin && !configSedeId) {
+      setConfigError("Selecciona una sede.");
+      return;
+    }
+
+    const stockMin = Number(configMin);
+    const stockMax = Number(configMax);
+    if (
+      configMin.trim() === "" ||
+      !Number.isFinite(stockMin) ||
+      stockMin < 0
+    ) {
+      setConfigError("El stock mínimo debe ser un número mayor o igual a 0.");
+      return;
+    }
+    if (
+      configMax.trim() === "" ||
+      !Number.isFinite(stockMax) ||
+      stockMax < 0
+    ) {
+      setConfigError("El stock máximo debe ser un número mayor o igual a 0.");
+      return;
+    }
+
+    setConfigSaving(true);
+    setConfigError(null);
+    try {
+      await inventarioApi.upsertInventario({
+        productoId: configProductId,
+        sedeId: isSuperadmin ? configSedeId : undefined,
+        stockMin,
+        stockMax,
+        ubicacion: configLocation.trim(),
+      });
+      toast.success(
+        configItem
+          ? "Configuración de inventario actualizada."
+          : "Producto configurado en el inventario.",
+      );
+      setConfigItem(undefined);
+      setLoading(true);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      const message = errorMessage(
+        err,
+        "No se pudo guardar la configuración del inventario.",
+      );
+      setConfigError(message);
+      toast.error(message);
+    } finally {
+      setConfigSaving(false);
+    }
   };
 
   const confirmAdjust = async () => {
     if (!adjustItem) return;
     const cantidad = Number(adjustQty);
-    if (!Number.isFinite(cantidad) || cantidad <= 0) {
-      setAdjustError("Ingresa una cantidad válida.");
+    const invalidQuantity =
+      adjustQty.trim() === "" ||
+      !Number.isFinite(cantidad) ||
+      (adjustType === "AJUSTE" ? cantidad < 0 : cantidad <= 0);
+    if (invalidQuantity) {
+      setAdjustError(
+        adjustType === "AJUSTE"
+          ? "El conteo físico debe ser mayor o igual a 0."
+          : "La cantidad debe ser mayor a 0.",
+      );
       return;
     }
     setAdjustSaving(true);
     setAdjustError(null);
     try {
       await inventarioApi.ajustarStock(adjustItem.id, {
-        tipo: adjustType === "entrada" ? "ENTRADA" : "SALIDA",
+        tipo: adjustType,
         cantidad,
-        referencia: "Ajuste manual",
+        referencia: adjustReference.trim() || undefined,
       });
+      toast.success("Stock actualizado.");
       setAdjustItem(null);
+      setLoading(true);
       setReloadKey((k) => k + 1);
     } catch (err) {
-      setAdjustError(errorMessage(err, "No se pudo registrar el ajuste."));
+      const message = errorMessage(err, "No se pudo registrar el ajuste.");
+      setAdjustError(message);
+      toast.error(message);
     } finally {
       setAdjustSaving(false);
     }
@@ -201,13 +404,25 @@ export default function InventarioPage() {
           title="Inventario"
           subtitle={`${total} productos con stock configurado`}
           action={
-            canCreateProduct ? (
-              <button
-                onClick={() => router.push("/productos")}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all active:scale-[0.98]"
-              >
-                <Plus size={15} /> NUEVO PRODUCTO
-              </button>
+            canCreateConfig || (canCreateProduct && canReadProducts) ? (
+              <div className="flex flex-wrap gap-2">
+                {canCreateConfig && (
+                  <button
+                    onClick={() => openConfig()}
+                    className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold tracking-wide text-black transition-all hover:bg-amber-400 active:scale-[0.98]"
+                  >
+                    <Settings2 size={15} /> CONFIGURAR INVENTARIO
+                  </button>
+                )}
+                {canCreateProduct && canReadProducts && (
+                  <button
+                    onClick={() => router.push("/productos")}
+                    className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold tracking-wide text-foreground transition-all hover:bg-muted active:scale-[0.98]"
+                  >
+                    <Plus size={15} /> NUEVO PRODUCTO
+                  </button>
+                )}
+              </div>
             ) : undefined
           }
         />
@@ -405,13 +620,25 @@ export default function InventarioPage() {
                           {item.ubicacion}
                         </td>
                         <td className="px-4 py-3">
-                          {canEdit ? (
-                            <button
-                              onClick={() => openAdjust(item)}
-                              className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-medium hover:bg-amber-500/20 transition-colors"
-                            >
-                              Ajustar
-                            </button>
+                          {canEdit || canConfigure ? (
+                            <div className="flex items-center gap-2">
+                              {canConfigure && (
+                                <button
+                                  onClick={() => openConfig(item)}
+                                  className="rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                                >
+                                  Configurar
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button
+                                  onClick={() => openAdjust(item)}
+                                  className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-500 transition-colors hover:bg-amber-500/20"
+                                >
+                                  Ajustar
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-muted-foreground/50 text-xs">
                               —
@@ -438,6 +665,167 @@ export default function InventarioPage() {
           </div>
         </div>
       </div>
+
+      {/* Configuración Modal */}
+      {configItem !== undefined && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={closeConfig}
+          />
+          <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-popover animate-scale-in">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground">
+                  {configItem
+                    ? "CONFIGURAR INVENTARIO"
+                    : "AGREGAR AL INVENTARIO"}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  El stock inicial de una nueva configuración será 0.
+                </p>
+              </div>
+              <button
+                onClick={closeConfig}
+                disabled={configSaving}
+                aria-label="Cerrar configuración"
+              >
+                <X size={20} className="text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto p-6">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Producto *
+                </label>
+                <select
+                  value={configProductId}
+                  onChange={(event) => setConfigProductId(event.target.value)}
+                  disabled={configLoading || configSaving || Boolean(configItem)}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all focus:border-amber-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="">
+                    {configLoading
+                      ? "Cargando productos..."
+                      : "Seleccionar producto..."}
+                  </option>
+                  {configItem &&
+                    !products.some(
+                      (product) => product.id === configItem.productoId,
+                    ) && (
+                      <option value={configItem.productoId}>
+                        {configItem.producto} ({configItem.codigo})
+                      </option>
+                    )}
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.nombre} ({product.codigo})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {isSuperadmin && (
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Sede *
+                  </label>
+                  <select
+                    value={configSedeId}
+                    onChange={(event) => setConfigSedeId(event.target.value)}
+                    disabled={configLoading || configSaving || Boolean(configItem)}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all focus:border-amber-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">
+                      {configLoading ? "Cargando sedes..." : "Seleccionar sede..."}
+                    </option>
+                    {configItem &&
+                      !establishments.some(
+                        (sede) => sede.id === configItem.sedeId,
+                      ) && (
+                        <option value={configItem.sedeId}>Sede actual</option>
+                      )}
+                    {establishments.map((sede) => (
+                      <option key={sede.id} value={sede.id}>
+                        {sede.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Stock mínimo *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={configMin}
+                    onChange={(event) => setConfigMin(event.target.value)}
+                    disabled={configSaving}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all focus:border-amber-500/50 disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Stock máximo *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={configMax}
+                    onChange={(event) => setConfigMax(event.target.value)}
+                    disabled={configSaving}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all focus:border-amber-500/50 disabled:opacity-60"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ubicación
+                </label>
+                <input
+                  type="text"
+                  value={configLocation}
+                  onChange={(event) => setConfigLocation(event.target.value)}
+                  disabled={configSaving}
+                  placeholder="Ej. Almacén A, estante 3"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/50 focus:border-amber-500/50 disabled:opacity-60"
+                />
+              </div>
+
+              {configError && (
+                <p role="alert" className="text-xs text-destructive">
+                  {configError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-border bg-muted/20 px-6 py-4">
+              <button
+                onClick={closeConfig}
+                disabled={configSaving}
+                className="h-10 rounded-xl border border-border bg-muted/60 px-4 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveConfig}
+                disabled={configLoading || configSaving}
+                className="h-10 rounded-xl bg-amber-500 px-4 text-sm font-bold tracking-wide text-black transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {configSaving ? "GUARDANDO…" : "GUARDAR CONFIGURACIÓN"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ajuste Modal */}
       {adjustItem && (
@@ -470,39 +858,68 @@ export default function InventarioPage() {
               </p>
             </div>
             <div className="flex gap-2 mb-5">
-              {(["entrada", "salida"] as const).map((t) => (
+              {(["ENTRADA", "SALIDA", "AJUSTE"] as const).map((type) => (
                 <button
-                  key={t}
-                  onClick={() => setAdjustType(t)}
+                  key={type}
+                  onClick={() => {
+                    setAdjustType(type);
+                    setAdjustError(null);
+                  }}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border transition-all",
-                    adjustType === t
-                      ? t === "entrada"
+                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all",
+                    adjustType === type
+                      ? type === "ENTRADA"
                         ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-500"
-                        : "bg-red-500/15 border-red-500/40 text-red-500"
+                        : type === "SALIDA"
+                          ? "bg-red-500/15 border-red-500/40 text-red-500"
+                          : "bg-amber-500/15 border-amber-500/40 text-amber-500"
                       : "bg-muted/50 border-border text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {t === "entrada" ? (
+                  {type === "ENTRADA" ? (
                     <ArrowUp size={15} />
-                  ) : (
+                  ) : type === "SALIDA" ? (
                     <ArrowDown size={15} />
+                  ) : (
+                    <Settings2 size={15} />
                   )}
-                  {t === "entrada" ? "+ Entrada" : "– Salida"}
+                  {type === "ENTRADA"
+                    ? "+ Entrada"
+                    : type === "SALIDA"
+                      ? "- Salida"
+                      : "Conteo"}
                 </button>
               ))}
             </div>
             <div className="mb-5">
               <label className="text-xs text-muted-foreground uppercase tracking-wider">
-                Cantidad
+                {adjustType === "AJUSTE" ? "Conteo físico" : "Cantidad"}
               </label>
               <input
                 type="number"
                 value={adjustQty}
                 onChange={(e) => setAdjustQty(e.target.value)}
                 placeholder="0"
-                min={1}
+                min={adjustType === "AJUSTE" ? 0 : 0.01}
+                step="any"
                 className="w-full mt-2 h-12 px-4 rounded-xl bg-muted/50 border border-border text-foreground text-lg text-center focus:outline-none focus:border-amber-500/60 transition-all"
+              />
+              {adjustType === "AJUSTE" && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Reemplaza el stock actual por el conteo físico ingresado.
+                </p>
+              )}
+            </div>
+            <div className="mb-5">
+              <label className="text-xs text-muted-foreground uppercase tracking-wider">
+                Referencia (opcional)
+              </label>
+              <input
+                type="text"
+                value={adjustReference}
+                onChange={(event) => setAdjustReference(event.target.value)}
+                placeholder="Motivo o documento"
+                className="mt-2 h-10 w-full rounded-xl border border-border bg-muted/50 px-4 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/50 focus:border-amber-500/60"
               />
             </div>
             {adjustError && (

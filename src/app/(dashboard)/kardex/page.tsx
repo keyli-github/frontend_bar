@@ -20,7 +20,6 @@ import type {
 } from "@/types/api";
 import {
   Search,
-  Download,
   ArrowUp,
   ArrowDown,
   Zap,
@@ -145,7 +144,7 @@ export default function KardexPage() {
     >
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up">
+        <div className="animate-fade-in-up">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">
               Kardex de Inventario
@@ -154,14 +153,6 @@ export default function KardexPage() {
               Historial de movimientos de stock
             </p>
           </div>
-          <button
-            disabled
-            title="Exportación no disponible"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-muted-foreground text-sm font-medium w-fit opacity-50 cursor-not-allowed"
-          >
-            <Download size={16} />
-            Exportar
-          </button>
         </div>
 
         {error && (

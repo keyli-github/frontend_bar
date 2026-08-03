@@ -104,6 +104,8 @@ export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   // Respaldada por `GET/DELETE /auth/sesiones`: solo exige sesion valida,
   // no un permiso concreto (igual que /perfil).
   "/seguridad": null,
+  // Vista informativa sin datos ni acciones: el backend aún no implementa POS.
+  "/ventas": null,
   "/caja": "caja:leer",
   "/categorias": "categorias:leer",
   "/productos": "productos:leer",

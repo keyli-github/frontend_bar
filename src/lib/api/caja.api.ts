@@ -3,9 +3,12 @@ import type { Paginated } from "@/types/api";
 import type {
   AbrirCajaPayload,
   ArqueoCajaPayload,
+  CajaDetalle,
+  CajaHistorialQuery,
   CajaMovimiento,
-  CajaMovimientoTipo,
+  CajaMovimientosQuery,
   CajaSesion,
+  CajaSesionHistorial,
   MovimientoCajaPayload,
 } from "@/types/caja";
 
@@ -18,6 +21,28 @@ export async function getCajaActual(
   return data;
 }
 
+export async function getCajaHistorial(
+  query: CajaHistorialQuery = {},
+): Promise<Paginated<CajaSesionHistorial>> {
+  const { data } = await api.get<Paginated<CajaSesionHistorial>>(
+    "/caja/historial",
+    {
+      params: {
+        pagina: query.pagina ?? 1,
+        limite: query.limite ?? 10,
+        sedeId: query.sedeId,
+        estado: query.estado,
+      },
+    },
+  );
+  return data;
+}
+
+export async function getCajaDetalle(cajaId: string): Promise<CajaDetalle> {
+  const { data } = await api.get<CajaDetalle>(`/caja/${cajaId}`);
+  return data;
+}
+
 export async function abrirCaja(
   payload: AbrirCajaPayload,
 ): Promise<CajaSesion> {
@@ -27,7 +52,7 @@ export async function abrirCaja(
 
 export async function listMovimientosCaja(
   cajaId: string,
-  query: { pagina?: number; limite?: number; tipo?: CajaMovimientoTipo } = {},
+  query: CajaMovimientosQuery = {},
 ): Promise<Paginated<CajaMovimiento>> {
   const { data } = await api.get<Paginated<CajaMovimiento>>(
     `/caja/${cajaId}/movimientos`,

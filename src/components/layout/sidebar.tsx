@@ -9,73 +9,13 @@ import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import { canAccess, getRoleLabel } from "@/lib/roles";
-import { NAV_MODULES as API_NAV_MODULES, NAV_ROOT } from "@/lib/navigation";
+import { NAV_MODULES, NAV_ROOT } from "@/lib/navigation";
 import {
-  BarChart3,
   ChevronDown,
-  ClipboardList,
-  FileText,
-  Landmark,
-  Package,
   PanelLeftClose,
   PanelLeftOpen,
-  ShieldCheck,
-  Tags,
-  Truck,
-  UtensilsCrossed,
   X,
 } from "lucide-react";
-
-interface SidebarNavItem {
-  name: string;
-  href: string;
-  icon: React.ElementType;
-}
-
-interface SidebarNavModule {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  items: SidebarNavItem[];
-}
-
-const NAV_MODULES: SidebarNavModule[] = [
-  {
-    id: "ventas",
-    label: "Caja",
-    icon: BarChart3,
-    items: [{ name: "Caja", href: "/caja", icon: Landmark }],
-  },
-  {
-    id: "inventario",
-    label: "Inventario",
-    icon: Package,
-    items: [
-      { name: "Productos", href: "/productos", icon: UtensilsCrossed },
-      { name: "Categorías", href: "/categorias", icon: Tags },
-      { name: "Inventario", href: "/inventario", icon: Package },
-      { name: "Kardex", href: "/kardex", icon: FileText },
-      { name: "Compras", href: "/compras", icon: Truck },
-    ],
-  },
-  {
-    id: "personal",
-    label: "Personal",
-    icon: ClipboardList,
-    items: [{ name: "Asistencia", href: "/asistencia", icon: ClipboardList }],
-  },
-  ...API_NAV_MODULES.map((module) =>
-    module.id === "admin"
-      ? {
-          ...module,
-          items: [
-            ...module.items,
-            { name: "Seguridad", href: "/seguridad", icon: ShieldCheck },
-          ],
-        }
-      : module,
-  ),
-];
 
 /** Contenedor de acordeon animado por altura, sin JS de medicion. */
 function AccordionContent({
