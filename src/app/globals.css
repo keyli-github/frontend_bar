@@ -263,7 +263,9 @@
 }
 
 /* ================================================================
-   SCROLLBAR
+   SCROLLBAR — ocultar barra visual en todos los navegadores.
+   Duplicado dentro y fuera de @layer para ganar a cualquier
+   utilidad de Tailwind (overflow-*) que tenga mayor cascada.
    ================================================================ */
 @layer base {
   * {
@@ -277,6 +279,21 @@
     height: 0;
   }
 }
+
+/* Reglas fuera de capa: mayor especificidad que @layer base.
+   Garantizan que los contenedores con overflow-auto / overflow-x-auto
+   no muestren barra aunque Tailwind los declare en @layer utilities. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 
 /* ================================================================
    ANIMACIONES

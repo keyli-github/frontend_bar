@@ -762,14 +762,14 @@ export default function ProductosPage() {
             <h1 className="text-lg sm:text-xl font-bold text-foreground">
               Catálogo de Productos
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {loading ? <Bone className="h-3.5 w-24" /> : <>{total} productos</>}
+            <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+              {loading ? <Bone className="h-3.5 w-24" /> : <span>{total} productos</span>}
               {!canCreate && !canEdit && (
-                <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded-full">
+                <span className="ml-1 text-xs bg-muted px-2 py-0.5 rounded-full">
                   Solo lectura
                 </span>
               )}
-            </p>
+            </div>
           </div>
           {canCreate && categorias.length > 0 && (
             <button
