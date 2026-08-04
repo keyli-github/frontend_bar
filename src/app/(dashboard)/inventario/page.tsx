@@ -11,7 +11,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
-// Bones no se usa en esta página (carga sin esqueletos)
+import { Bones, BoneKpis, BoneTable } from "@/components/shared/bones";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
 import { useAuthStore } from "@/store/auth-store";
 import {
@@ -33,12 +33,12 @@ import type {
 } from "@/types/api";
 import {
   Plus,
-  X,
   ArrowUp,
   ArrowDown,
   Package,
   Settings2,
 } from "lucide-react";
+import { ModalShell } from "@/components/shared/modal-shell";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
@@ -98,15 +98,14 @@ export default function InventarioPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // null = cargando por primera vez | [] = vacío | [...] = con datos
-  // Nunca se resetea a null en paginación/filtros: el contenido anterior
-  // permanece visible mientras llega la nueva página (sin parpadeo).
+  // null = primera carga | [] = vacío | [...] = con datos
   const [items, setItems] = useState<InventarioItem[] | null>(null);
   const [resumen, setResumen] = useState<InventarioResumen | null>(null);
   const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
-  // (loading ya no es necesario: la tabla muestra items null/vacío/datos)
+  // loading se usa para el Bones de la tabla
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -186,7 +185,9 @@ export default function InventarioPage() {
         if (!cancelled)
           setError(errorMessage(err, "No se pudo cargar el inventario."));
       })
-      .finally(() => { /* sin setLoading: tabla permanece visible */ });
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
       cancelled = true;
@@ -434,8 +435,9 @@ export default function InventarioPage() {
           </p>
         )}
 
-        {/* KPIs — siempre visibles; muestran '—' mientras resumen es null */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* KPIs — skeleton inmediato, valores reales cuando resumen llega */}
+        <Bones name="inventario-kpis" loading={loading} placeholder={<BoneKpis count={4} />}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
             {
               label: "TOTAL PRODUCTOS",
@@ -476,8 +478,7 @@ export default function InventarioPage() {
             </div>
           ))}
         </div>
-
-        {/* Filtros */}
+        </Bones>        {/* Filtros */}
         <div className="flex flex-col sm:flex-row gap-3">
           <SearchBar
             value={search}
@@ -512,52 +513,42 @@ export default function InventarioPage() {
           </div>
         </div>
 
-        {/* Tabla — estructura siempre visible; filas aparecen cuando llegan los datos */}
+        {/* Tabla */}
         <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <table className="w-full text-sm min-w-[700px]">
-              <thead>
-                <tr className="border-b border-border">
-                  {[
-                    "Código",
-                    "Producto",
-                    "Categoría",
-                    "Stock",
-                    "Min/Max",
-                    "Estado",
-                    "Costo",
-                    "Ubicación",
-                    "",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {items === null ? (
-                  // Carga inicial: cuerpo vacío (estructura estable, sin esqueleto)
-                  <tr>
-                    <td colSpan={9} className="h-64 text-center align-middle text-sm text-muted-foreground">
-                      {error ? error : ''}
-                    </td>
+          <Bones name="inventario-tabla" loading={loading} placeholder={<BoneTable rows={PAGE_SIZE} cols={9} />}>
+            {items === null || items.length === 0 ? (
+              <EmptyState
+                icon={<Package size={22} />}
+                title="Sin productos"
+                description="Prueba con otros filtros."
+              />
+            ) : (
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <table className="w-full text-sm min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    {[
+                      "Código",
+                      "Producto",
+                      "Categoría",
+                      "Stock",
+                      "Min/Max",
+                      "Estado",
+                      "Costo",
+                      "Ubicación",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ) : items.length === 0 ? (
-                  <tr>
-                    <td colSpan={9}>
-                      <EmptyState
-                        icon={<Package size={22} />}
-                        title="Sin productos"
-                        description="Prueba con otros filtros."
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((item) => (
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {items.map((item) => (
                       <tr
                         key={item.id}
                         className="hover:bg-muted/30 transition-colors"
@@ -645,10 +636,12 @@ export default function InventarioPage() {
                         </td>
                       </tr>
                   ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                }
+                </tbody>
+              </table>
+            </div>
+            )}
+          </Bones>
 
           {/* Paginación */}
           <div className="border-t border-border px-4">
@@ -664,34 +657,13 @@ export default function InventarioPage() {
       </div>
 
       {/* Configuración Modal */}
-      {configItem !== undefined && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={closeConfig}
-          />
-          <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-popover animate-scale-in">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <div>
-                <h3 className="text-base font-bold text-foreground">
-                  {configItem
-                    ? "CONFIGURAR INVENTARIO"
-                    : "AGREGAR AL INVENTARIO"}
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  El stock inicial de una nueva configuración será 0.
-                </p>
-              </div>
-              <button
-                onClick={closeConfig}
-                disabled={configSaving}
-                aria-label="Cerrar configuración"
-              >
-                <X size={20} className="text-muted-foreground" />
-              </button>
-            </div>
-
-            <div className="space-y-4 overflow-y-auto p-6">
+      <ModalShell
+        open={configItem !== undefined}
+        title={configItem ? "CONFIGURAR INVENTARIO" : "AGREGAR AL INVENTARIO"}
+        subtitle="El stock inicial de una nueva configuración será 0."
+        onClose={closeConfig}
+      >
+            <div className="space-y-4">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Producto *
@@ -804,8 +776,9 @@ export default function InventarioPage() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-border bg-muted/20 px-6 py-4">
+            <div className="-mx-5 sm:-mx-6 -mb-5 sm:-mb-6 mt-5 flex justify-end gap-3 border-t border-border bg-muted/20 px-6 py-4">
               <button
+                type="button"
                 onClick={closeConfig}
                 disabled={configSaving}
                 className="h-10 rounded-xl border border-border bg-muted/60 px-4 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
@@ -813,6 +786,7 @@ export default function InventarioPage() {
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={saveConfig}
                 disabled={configLoading || configSaving}
                 className="h-10 rounded-xl bg-amber-500 px-4 text-sm font-bold tracking-wide text-black transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
@@ -820,29 +794,17 @@ export default function InventarioPage() {
                 {configSaving ? "GUARDANDO…" : "GUARDAR CONFIGURACIÓN"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalShell>
 
       {/* Ajuste Modal */}
-      {adjustItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => !adjustSaving && setAdjustItem(null)}
-          />
-          <div className="relative w-full max-w-sm bg-popover border border-border rounded-2xl p-6 animate-scale-in">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-bold text-foreground text-base">
-                AJUSTE DE STOCK
-              </h3>
-              <button
-                onClick={() => setAdjustItem(null)}
-                disabled={adjustSaving}
-              >
-                <X size={20} className="text-muted-foreground" />
-              </button>
-            </div>
+      <ModalShell
+        open={Boolean(adjustItem)}
+        title="AJUSTE DE STOCK"
+        onClose={() => { if (!adjustSaving) setAdjustItem(null); }}
+        className="max-w-sm"
+      >
+            {adjustItem && (
+            <>
             <div className="bg-muted/40 rounded-xl p-4 mb-5 border border-border">
               <p className="text-foreground font-medium">
                 {adjustItem.producto}
@@ -857,6 +819,7 @@ export default function InventarioPage() {
             <div className="flex gap-2 mb-5">
               {(["ENTRADA", "SALIDA", "AJUSTE"] as const).map((type) => (
                 <button
+                  type="button"
                   key={type}
                   onClick={() => {
                     setAdjustType(type);
@@ -925,15 +888,16 @@ export default function InventarioPage() {
               </p>
             )}
             <button
+              type="button"
               onClick={confirmAdjust}
               disabled={adjustSaving}
               className="w-full h-11 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {adjustSaving ? "GUARDANDO…" : "CONFIRMAR AJUSTE"}
             </button>
-          </div>
-        </div>
-      )}
+            </>
+            )}
+      </ModalShell>
     </div>
   );
 }

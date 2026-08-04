@@ -391,7 +391,7 @@ export default function DashboardPage() {
     (verKardex || verInventario || verAsistencia || verCompras || verRoles);
 
   return (
-    <div className="space-y-5 p-4 lg:p-6">
+    <div className="min-h-full space-y-5 p-4 lg:p-6">
 
       {/* ── Saludo ── */}
       <div>

@@ -31,13 +31,13 @@ import {
   Phone,
   User,
   Mail,
-  X,
   Package,
   CheckCircle2,
   Trash2,
   ShoppingBag,
   Truck,
 } from "lucide-react";
+import { ModalShell } from "@/components/shared/modal-shell";
 
 const PAGE_SIZE = 15;
 const PROV_PAGE_SIZE = 12;
@@ -124,43 +124,27 @@ function OrderDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={() => !saving && onClose()}
-      />
-      <div className="relative w-full max-w-lg bg-popover border border-border rounded-2xl shadow-2xl animate-scale-in overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div>
-            <h3 className="font-bold text-foreground text-base">
-              {data.orden}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {data.proveedor} · {data.fecha}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "px-2.5 py-0.5 rounded border text-[10px] font-bold",
-                estadoBadge[data.estado],
-              )}
-            >
-              {data.estado}
-            </span>
-            <button
-              onClick={onClose}
-              disabled={saving}
-              className="text-muted-foreground hover:text-foreground p-1"
-            >
-              <X size={18} />
-            </button>
-          </div>
+    <ModalShell
+      open={true}
+      title={data.orden}
+      subtitle={`${data.proveedor} · ${data.fecha}`}
+      onClose={() => { if (!saving) onClose(); }}
+    >
+      <div className="-mx-5 sm:-mx-6 -mb-5 sm:-mb-6">
+        {/* Estado badge */}
+        <div className="px-5 pb-3">
+          <span
+            className={cn(
+              "px-2.5 py-0.5 rounded border text-[10px] font-bold",
+              estadoBadge[data.estado],
+            )}
+          >
+            {data.estado}
+          </span>
         </div>
 
         {/* Timeline */}
-        <div className="px-5 py-4 border-b border-border">
+        <div className="px-5 py-4 border-y border-border">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Estado de la orden
           </p>
@@ -224,7 +208,7 @@ function OrderDetailModal({
         </div>
 
         {/* Items reales */}
-        <div className="px-5 py-4 overflow-y-auto flex-1">
+        <div className="px-5 py-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Artículos ({data.articulos})
           </p>
@@ -296,6 +280,7 @@ function OrderDetailModal({
           <div className="flex gap-2 flex-wrap justify-end">
             {canEdit && data.estado === "PENDIENTE" && (
               <button
+                type="button"
                 onClick={() => changeEstado("ENVIADA")}
                 disabled={saving}
                 className="px-3 py-2 rounded-xl bg-blue-500 text-white text-xs font-bold hover:bg-blue-400 transition-all disabled:opacity-50"
@@ -305,6 +290,7 @@ function OrderDetailModal({
             )}
             {canEdit && data.estado === "ENVIADA" && (
               <button
+                type="button"
                 onClick={() => changeEstado("RECIBIDA")}
                 disabled={saving}
                 className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-400 transition-all disabled:opacity-50"
@@ -315,6 +301,7 @@ function OrderDetailModal({
             {canEdit &&
               (data.estado === "PENDIENTE" || data.estado === "ENVIADA") && (
                 <button
+                  type="button"
                   onClick={() => changeEstado("CANCELADA")}
                   disabled={saving}
                   className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/25 text-red-500 text-xs font-bold hover:bg-red-500/20 transition-all disabled:opacity-50"
@@ -323,6 +310,7 @@ function OrderDetailModal({
                 </button>
               )}
             <button
+              type="button"
               onClick={onClose}
               disabled={saving}
               className="px-3 py-2 rounded-xl bg-muted/60 border border-border text-foreground text-xs hover:bg-muted transition-colors disabled:opacity-50"
@@ -332,7 +320,7 @@ function OrderDetailModal({
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -425,22 +413,13 @@ function NewOrderModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={() => !saving && onClose()}
-      />
-      <div className="relative w-full max-w-2xl bg-popover border border-border rounded-2xl shadow-2xl animate-scale-in overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center px-5 py-4 border-b border-border">
-          <h3 className="font-bold text-foreground text-base">
-            NUEVA ORDEN DE COMPRA
-          </h3>
-          <button onClick={onClose} disabled={saving}>
-            <X size={20} className="text-muted-foreground" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+    <ModalShell
+      open={true}
+      title="NUEVA ORDEN DE COMPRA"
+      onClose={() => { if (!saving) onClose(); }}
+      className="max-w-2xl"
+    >
+      <div className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -479,6 +458,7 @@ function NewOrderModal({
                 Artículos *
               </label>
               <button
+                type="button"
                 onClick={addItem}
                 disabled={loadingProds}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-500 text-xs font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50"
@@ -561,6 +541,7 @@ function NewOrderModal({
                         </p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => removeItem(i)}
                         className="mb-0.5 p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors flex-shrink-0"
                       >
@@ -594,7 +575,7 @@ function NewOrderModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
+        <div className="-mx-5 sm:-mx-6 -mb-5 sm:-mb-6 mt-5 px-5 py-4 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
           <div className="text-sm">
             <span className="text-muted-foreground">Total: </span>
             <span className="font-bold text-foreground font-mono">
@@ -603,6 +584,7 @@ function NewOrderModal({
           </div>
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={onClose}
               disabled={saving}
               className="h-10 px-4 rounded-xl bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors disabled:opacity-50"
@@ -610,6 +592,7 @@ function NewOrderModal({
               Cancelar
             </button>
             <button
+              type="button"
               onClick={submit}
               disabled={!valid || saving}
               className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -618,8 +601,7 @@ function NewOrderModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -705,20 +687,12 @@ function ProveedorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={() => !saving && onClose()}
-      />
-      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-popover border border-border rounded-2xl p-6 animate-scale-in">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="font-bold text-foreground text-base">
-            {proveedor ? "EDITAR PROVEEDOR" : "NUEVO PROVEEDOR"}
-          </h3>
-          <button onClick={onClose} disabled={saving}>
-            <X size={20} className="text-muted-foreground" />
-          </button>
-        </div>
+    <ModalShell
+      open={true}
+      title={proveedor ? "EDITAR PROVEEDOR" : "NUEVO PROVEEDOR"}
+      onClose={() => { if (!saving) onClose(); }}
+      className="max-w-md"
+    >
         <div className="space-y-3">
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -803,6 +777,7 @@ function ProveedorModal({
           )}
           <div className="flex gap-3 pt-2">
             <button
+              type="button"
               onClick={onClose}
               disabled={saving}
               className="flex-1 h-10 rounded-lg bg-muted/60 border border-border text-foreground text-sm hover:bg-muted transition-colors disabled:opacity-50"
@@ -810,6 +785,7 @@ function ProveedorModal({
               Cancelar
             </button>
             <button
+              type="button"
               onClick={submit}
               disabled={form.nombre.trim().length < 2 || saving}
               className="flex-1 h-10 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all disabled:opacity-40"
@@ -818,8 +794,7 @@ function ProveedorModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1280,7 +1255,7 @@ export default function ComprasPage() {
               </p>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="search"
                 value={pSearch}
@@ -1326,7 +1301,7 @@ export default function ComprasPage() {
                     >
                       <div className="flex items-start gap-3 mb-4">
                         <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                          <span className="text-amber-500 text-lg">🧳</span>
+                           <Truck size={20} className="text-amber-500" />
                         </div>
                         <div className="min-w-0">
                           <h3 className="font-semibold text-foreground truncate">

@@ -179,7 +179,7 @@ export default function RolesPage() {
 
   return (
     <div className="min-h-full bg-background">
-<main className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
+<div className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
         <PageHeader
           title="Roles y acceso"
           subtitle="Administra niveles de acceso y permisos por función operativa."
@@ -200,7 +200,7 @@ export default function RolesPage() {
           onRetry={reload}
           placeholder={<BoneKpis count={4} />}
         >
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard
             label="ROLES ACTIVOS"
             value={`${activeRoles}/${roles.length}`}
@@ -434,7 +434,7 @@ export default function RolesPage() {
           pageSize={PAGE_SIZE}
           onPageChange={goToPage}
         />
-      </main>
+      </div>
 
       {roleModal && (
         <RoleFormModal

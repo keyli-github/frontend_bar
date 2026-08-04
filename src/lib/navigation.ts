@@ -127,6 +127,6 @@ export function getActiveModuleId(pathname: string): string {
 export const MOBILE_NAV: NavItem[] = [
   NAV_ROOT,
   { name: 'Usuarios', href: '/usuarios', icon: Users },
-  { name: 'Sedes', href: '/sucursales', icon: Home },
+  { name: 'Sucursales', href: '/sucursales', icon: Home },
   { name: 'Auditoría', href: '/auditoria', icon: ScrollText },
 ];

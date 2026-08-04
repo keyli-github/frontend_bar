@@ -119,9 +119,9 @@ export function Header({ title: titleOverride }: { title?: string } = {}) {
 
       {/* `truncate` + `min-w-0` evitan que un titulo largo empuje las
           acciones fuera de la pantalla en moviles estrechos. */}
-      <h1 className="flex-1 min-w-0 truncate text-base font-semibold text-foreground">
+      <p className="flex-1 min-w-0 truncate text-base font-semibold text-foreground" aria-hidden="true">
         {title}
-      </h1>
+      </p>
 
       <div className="flex items-center gap-1 sm:gap-2">
         {/* Indicador del alcance de sede que impone el backend. */}

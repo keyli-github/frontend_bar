@@ -1,24 +1,20 @@
 'use client';
 
 /**
- * Sistema de estados de carga con umbrales progresivos.
+ * Sistema de estados de carga con duración mínima de skeleton.
  *
- * Fases de carga en `<Bones>`:
- *   0 – 180 ms  → sin indicador visual (operaciones rápidas pasan inadvertidas)
- *   180 ms – 3 s → esqueleto estático (sin animación de pulso)
- *   3 s – 10 s   → esqueleto + advertencia discreta "tardando más de lo esperado"
- *   > 10 s       → estado de tiempo agotado con botón "Reintentar"
- *
- * Por qué este enfoque:
- *   Si la API responde en <180 ms el usuario no ve ningún parpadeo porque el
- *   esqueleto nunca se muestra. Para respuestas lentas, los estados escalados
- *   informan al usuario de forma apropiada sin reemplazar datos existentes.
- *
- * `refreshing` (opcional):
- *   Cuando hay datos visibles y se actualiza en segundo plano, pasar
- *   `refreshing={true}` muestra un spinner mínimo sin ocultar el contenido.
+ * Comportamiento de `<Bones>`:
+ *   - El skeleton aparece en el PRIMER frame cuando loading=true.
+ *   - Permanece visible al menos MIN_SKELETON_MS (2 s) aunque la API
+ *     responda antes. Así el usuario lo percibe como un estado intencional
+ *     y no como un parpadeo.
+ *   - La transición skeleton→contenido usa un crossfade de 200 ms:
+ *     la ESTRUCTURA (tarjetas, botones, encabezados) no se mueve —
+ *     solo los valores numéricos/textuales actualizan.
+ *   - A los 3 s muestra un aviso de lentitud.
+ *   - A los 10 s muestra estado de timeout con "Reintentar".
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Skeleton as BoneyardSkeleton } from 'boneyard-js/react';
 import { cn } from '@/lib/utils';
 import {
@@ -28,32 +24,49 @@ import {
 } from './loading-states';
 
 // ─── Umbrales ─────────────────────────────────────────────────────────────────
-const T_SKELETON = 180;     // ms → aparece esqueleto
-const T_SLOW     = 3_000;   // ms → advertencia de lentitud
-const T_TIMEOUT  = 10_000;  // ms → tiempo agotado (retry)
+const MIN_SKELETON_MS = 2_000;  // ms mínimos que el skeleton permanece visible
+const T_SLOW          = 3_000;  // ms → banner "tardando más de lo esperado"
+const T_TIMEOUT       = 10_000; // ms → timeout con botón "Reintentar"
 
 type Phase = 'content' | 'skeleton' | 'slow' | 'timeout';
 
 function useLoadPhase(loading: boolean): Phase {
-  const [phase, setPhase] = useState<Phase>('content');
+  // Inicializar directamente en 'skeleton' cuando loading=true en el montaje,
+  // para que el skeleton aparezca en el PRIMER frame sin ningún delay.
+  const [phase, setPhase] = useState<Phase>(loading ? 'skeleton' : 'content');
+
+  // Registra el momento exacto en que el skeleton empezó a mostrarse.
+  // Inicializar a null; el efecto lo asigna en el primer render si loading=true.
+  const skeletonStartRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!loading) {
-      // Deferred para cumplir react-hooks/set-state-in-effect.
-      // El setTimeout(fn, 0) es invisible para el usuario (<5 ms).
+    if (loading) {
+      // Si vuelve a cargar (ej. refresh), registrar nuevo tiempo de inicio.
+      // También cubre el caso de montaje inicial con loading=true.
+      if (skeletonStartRef.current === null) {
+        skeletonStartRef.current = Date.now();
+      }
+      const t2 = setTimeout(() => setPhase('slow'),    T_SLOW);
+      const t3 = setTimeout(() => setPhase('timeout'), T_TIMEOUT);
+      return () => { clearTimeout(t2); clearTimeout(t3); };
+    }
+
+    // La API respondió. Calcular cuánto falta para completar los 2 s mínimos.
+    const start    = skeletonStartRef.current;
+    skeletonStartRef.current = null;
+
+    if (start === null) {
+      // Nunca estuvo en modo skeleton — pasar a contenido directamente.
       const t = setTimeout(() => setPhase('content'), 0);
       return () => clearTimeout(t);
     }
 
-    // Timers escalados — se cancelan todos si loading vuelve a false.
-    const t1 = setTimeout(() => setPhase('skeleton'), T_SKELETON);
-    const t2 = setTimeout(() => setPhase('slow'),     T_SLOW);
-    const t3 = setTimeout(() => setPhase('timeout'),  T_TIMEOUT);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
+    const elapsed   = Date.now() - start;
+    const remaining = Math.max(0, MIN_SKELETON_MS - elapsed);
+
+    // Esperar el tiempo restante antes de mostrar el contenido real.
+    const t = setTimeout(() => setPhase('content'), remaining);
+    return () => clearTimeout(t);
   }, [loading]);
 
   return phase;
@@ -62,13 +75,13 @@ function useLoadPhase(loading: boolean): Phase {
 // ─── Bone ─────────────────────────────────────────────────────────────────────
 
 /**
- * Bloque de placeholder estático (sin animate-pulse para evitar parpadeo).
+ * Bloque de placeholder con animación de pulso suave — igual que Frank.
  */
 export function Bone({ className }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className={cn('rounded-md bg-border/40', className)}
+      className={cn('animate-pulse rounded-md bg-muted', className)}
     />
   );
 }
@@ -113,20 +126,16 @@ export function Bones({
 
   return (
     <div className={cn('relative', className)}>
-      {/* Spinner de actualización en segundo plano (no reemplaza contenido) */}
       {refreshing && !showSkeleton && (
         <RefreshSpinner className="absolute right-3 top-3 z-10" />
       )}
-
-      {/* Advertencia de lentitud a los 3 s */}
       {phase === 'slow' && <SlowLoadingBanner />}
 
       <BoneyardSkeleton
         name={name}
         loading={showSkeleton}
         select="viewport"
-        transition={0}
-        animate={false}
+        transition={200}
         fallback={placeholder}
       >
         {showSkeleton ? placeholder : children}

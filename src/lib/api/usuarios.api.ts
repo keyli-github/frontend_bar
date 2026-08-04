@@ -20,7 +20,7 @@ export async function listUsuarios(
   query: ListUsuariosQuery = {},
 ): Promise<Paginated<Usuario>> {
   const { data } = await api.get<Paginated<Usuario>>('/usuarios', {
-    params: { pagina: query.pagina ?? 1, limite: query.limite ?? 25 },
+    params: { ...query, pagina: query.pagina ?? 1, limite: query.limite ?? 25 },
   });
   return data;
 }

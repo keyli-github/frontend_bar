@@ -145,7 +145,7 @@ export default function SeguridadPage() {
       : '';
 
   return (
-    <div className="min-h-full bg-background"><main className="space-y-4 p-3 sm:p-4 lg:p-6">
+    <div className="min-h-full bg-background"><div className="space-y-4 p-3 sm:p-4 lg:p-6">
         <PageHeader
           title="Seguridad"
           subtitle="Administra tu contraseña y revisa los dispositivos conectados."
@@ -157,7 +157,7 @@ export default function SeguridadPage() {
         />
 
         <Bones name="seguridad-kpis" loading={loading} onRetry={recargar} placeholder={<BoneKpis count={4} />}>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard label="SESIONES ACTIVAS" value={String(sessions.length)} subtitle="Dispositivos conectados" icon={<MonitorSmartphone size={13} />} />
           <StatCard label="OTROS DISPOSITIVOS" value={String(otherSessions.length)} subtitle="Fuera de este equipo" icon={<Laptop size={13} />} valueColor="text-blue-500" />
           <StatCard label="SESIÓN ACTUAL" value="Activa" subtitle={currentSession?.deviceName ?? 'Sin información'} icon={<ShieldCheck size={13} />} valueColor="text-emerald-500" />
@@ -234,7 +234,7 @@ export default function SeguridadPage() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Protección de cuenta</h2>
-                <p className="text-[10px] text-muted-foreground">4 medidas activas</p>
+                <p className="text-[10px] text-muted-foreground">{protections.length} medidas activas</p>
               </div>
             </div>
 
@@ -260,7 +260,7 @@ export default function SeguridadPage() {
             </div>
           </aside>
         </div>
-      </main>
+      </div>
 
       <ConfirmModal
         open={pendingAction !== null}

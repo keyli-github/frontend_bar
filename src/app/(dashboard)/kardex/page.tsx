@@ -279,26 +279,26 @@ export default function KardexPage() {
               />
             ) : (
               <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      {[
-                        "ID",
-                        "Fecha",
-                        "Hora",
-                        "Producto",
-                        "Codigo",
-                        "Tipo",
-                        "Cant.",
-                        "Stock ant.",
-                        "Stock nuevo",
-                        "Valor",
-                        "Referencia",
-                        "Usuario",
-                      ].map((h) => (
+                      {([
+                        ["ID", "w-20"],
+                        ["Fecha", "w-24"],
+                        ["Hora", "w-16"],
+                        ["Producto", "min-w-[160px]"],
+                        ["Codigo", "w-24"],
+                        ["Tipo", "w-20"],
+                        ["Cant.", "w-20"],
+                        ["Stock ant.", "w-20"],
+                        ["Stock nuevo", "w-20"],
+                        ["Valor", "w-20"],
+                        ["Referencia", "min-w-[120px]"],
+                        ["Usuario", "w-24"],
+                      ] as [string, string][]).map(([h, w]) => (
                         <th
                           key={h}
-                          className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                          className={cn("px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap", w)}
                         >
                           {h}
                         </th>
@@ -313,22 +313,22 @@ export default function KardexPage() {
                           key={k.id}
                           className="hover:bg-muted/40 transition-colors"
                         >
-                          <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium">
+                          <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium w-20">
                             {k.id.slice(0, 8)}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-3 text-muted-foreground text-xs w-24">
                             {k.fecha}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-mono text-xs">
+                          <td className="px-4 py-3 text-foreground font-mono text-xs w-16">
                             {k.hora}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-medium">
+                          <td className="px-4 py-3 text-foreground font-medium min-w-[160px]">
                             {k.producto}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-3 text-muted-foreground text-xs w-24">
                             {k.codigo}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 w-20">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold",
@@ -339,7 +339,7 @@ export default function KardexPage() {
                               {k.tipo}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 w-20">
                             <span
                               className={cn(
                                 "font-bold",
@@ -359,19 +359,19 @@ export default function KardexPage() {
                               {k.cantidad} {k.unidad}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
+                          <td className="px-4 py-3 text-muted-foreground w-20">
                             {k.stockAnterior}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-semibold">
+                          <td className="px-4 py-3 text-foreground font-semibold w-20">
                             {k.stockNuevo}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-mono">
+                          <td className="px-4 py-3 text-foreground font-mono w-20">
                             {formatCurrency(k.valor)}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs max-w-[120px] truncate">
+                          <td className="px-4 py-3 text-muted-foreground text-xs min-w-[120px] truncate">
                             {k.referencia}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-3 text-muted-foreground text-xs w-24">
                             {k.usuario}
                           </td>
                         </tr>

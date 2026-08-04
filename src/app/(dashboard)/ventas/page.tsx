@@ -39,7 +39,7 @@ export default function VentasPage() {
       </div>
 
       <div className="mx-auto flex min-h-[calc(100vh-130px)] max-w-6xl flex-col lg:flex-row">
-        <main className="flex-1 space-y-5 p-4 lg:p-6">
+        <div className="flex-1 space-y-5 p-4 lg:p-6">
           <header>
             <h1 className="text-2xl font-bold text-foreground">Punto de venta</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -101,7 +101,7 @@ export default function VentasPage() {
               </div>
             </div>
           </section>
-        </main>
+        </div>
 
         <aside className="flex min-h-72 w-full flex-col border-t border-border bg-sidebar lg:w-[360px] lg:border-l lg:border-t-0">
           <div className="border-b border-border p-4">

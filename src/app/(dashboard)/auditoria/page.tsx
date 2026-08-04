@@ -23,7 +23,7 @@ import { Pagination } from '@/components/shared/pagination';
 import { SearchBar } from '@/components/shared/search-bar';
 import { StatCard } from '@/components/shared/stat-card';
 import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
-import { ApiError, auditApi } from '@/lib/api';
+import { ApiError, auditApi, establecimientosApi } from '@/lib/api';
 import { hasPermission } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth-store';
@@ -100,6 +100,17 @@ export default function AuditoriaPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<AuditLog | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [sedes, setSedes] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    establecimientosApi.listEstablecimientos({ limite: 100 })
+      .then((res) => {
+        const map: Record<string, string> = {};
+        res.data.forEach((s) => { map[s.id] = s.nombre; });
+        setSedes(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 
@@ -192,7 +203,7 @@ export default function AuditoriaPage() {
 
   return (
     <div className="min-h-full bg-background">
-<main className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
+<div className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
         <PageHeader
           title="Registro de auditoría"
           subtitle="Trazabilidad de accesos y cambios administrativos del sistema"
@@ -205,7 +216,7 @@ export default function AuditoriaPage() {
         />
 
         <Bones name="auditoria-kpis" loading={loading} onRetry={reload} placeholder={<BoneKpis count={4} />}>
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard
             label="Eventos registrados"
             value={String(total)}
@@ -302,7 +313,7 @@ export default function AuditoriaPage() {
           </p>
         )}
 
-        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm animate-fade-in-up">
           <div className="flex flex-col gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Historial de actividad</h2>
@@ -380,8 +391,14 @@ export default function AuditoriaPage() {
                           {log.userAgent ?? 'User-agent no disponible'}
                         </p>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {log.sedeId ?? 'Global'}
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {log.sedeId ? (
+                          <span title={log.sedeId} className="text-xs">
+                            {sedes[log.sedeId] ?? log.sedeId.slice(0, 8) + '…'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Global</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -421,7 +438,7 @@ export default function AuditoriaPage() {
             />
           </div>
         </section>
-      </main>
+      </div>
 
       <ModalShell
         open={Boolean(selectedEvent)}
@@ -510,7 +527,7 @@ function AuditEventDetail({ event }: { event: AuditLog }) {
               application/json
             </span>
           </div>
-          <pre className="max-h-56 overflow-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-xs leading-5 text-emerald-300 shadow-inner">
+          <pre className="max-h-56 overflow-y-auto rounded-xl border border-border bg-muted p-4 font-mono text-xs leading-5 text-foreground">
             {JSON.stringify(event.detalle, null, 2)}
           </pre>
         </div>

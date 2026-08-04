@@ -70,11 +70,23 @@
 }
 
 /* ================================================================
+   ESCALA DE Z-INDEX GLOBAL
+   Contenido:       0
+   Header/Sidebar:  20-30
+   Dropdowns:       40
+   Overlay modal:   80
+   ModalShell:      100
+   ConfirmModal:    110
+   Toast/Sonner:    120
+   ================================================================ */
+
+/* ================================================================
    MODO CLARO  — todo #ffffff, sin grises
    ================================================================ */
 :root {
-  /* Fondos: blanco puro en hex para máxima compatibilidad */
-  --background:        #ffffff;
+  /* Fondos: fondo ligeramente azulado para que las cards blancas
+     "floten" sobre él sin depender solo de la sombra */
+  --background:        #f5f7fb;
   --card:              #ffffff;
   --popover:           #ffffff;
   --sidebar:           #ffffff;
@@ -94,10 +106,11 @@
   --primary-foreground:#1a1206;
   --primary-text:      #b45309;
 
-  /* Secundario / muted — gris muy suave solo para inputs y zonas muted */
-  --secondary:              #f4f4f6;
+  /* Secundario / muted — gris sutilmente más oscuro que el fondo para
+     distinguirse del background #f5f7fb sin chocar con las cards blancas */
+  --secondary:              #f0f2f7;
   --secondary-foreground:   #111118;
-  --muted:                  #f4f4f6;
+  --muted:                  #f0f2f7;
   --muted-foreground:       #6b7280;
   --accent:                 #f4f4f6;
   --accent-foreground:      #111118;
@@ -313,6 +326,31 @@
   height: 0;
 }
 
+/* ================================================================
+   MODAL SCROLLBAR — re-enables a thin, styled scrollbar for modal
+   dialogs so users can see when content overflows.
+   Overrides the global scrollbar-width:none above via higher
+   specificity (class selector beats universal selector).
+   ================================================================ */
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 16%, transparent) transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 9999px;
+}
+
 
 /* ================================================================
    ANIMACIONES
@@ -339,6 +377,7 @@
 .animate-scale-in    { animation: scaleIn 0.28s ease-out forwards; }
 .animate-slide-in-up { animation: slideInUp 0.32s ease-out forwards; }
 
+/* Stagger: aparición escalonada de tarjetas y bloques (igual que Frank) */
 .stagger-children > * { opacity: 0; animation: fadeInUp 0.38s ease-out forwards; }
 .stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
 .stagger-children > *:nth-child(2)  { animation-delay: 55ms; }
@@ -351,32 +390,10 @@
 .stagger-children > *:nth-child(9)  { animation-delay: 440ms; }
 .stagger-children > *:nth-child(10) { animation-delay: 495ms; }
 
-/* Las entradas de pagina no deben ocultar contenido ya resuelto al navegar. */
-.dashboard-route-content .animate-fade-in-up {
-  animation: none;
-  opacity: 1;
-  transform: none;
-}
-
-.dashboard-route-content .stagger-children > * {
-  animation: none;
-  opacity: 1;
-  transform: none;
-}
-
-/* ── Sin parpadeo en placeholders de carga ─────────────────────────────────
-   Desactiva cualquier animate-pulse residual dentro del viewport principal.
-   Los Bone usan bg-border/40 estatico; esta regla es un respaldo de seguridad.
-   El keyframe propio de boneyard-js se neutraliza en bones.tsx con animate=false.
-   ────────────────────────────────────────────────────────────────────────── */
-.dashboard-route-content .animate-pulse {
-  animation: none !important;
-}
-
 /* ================================================================
    ACCESIBILIDAD DE MOVIMIENTO
    Respeta la preferencia del sistema: sin esto las animaciones
-   stagger provocan mareo a usuarios sensibles al movimiento.
+   provocan mareo a usuarios sensibles al movimiento.
    ================================================================ */
 @media (prefers-reduced-motion: reduce) {
   *,

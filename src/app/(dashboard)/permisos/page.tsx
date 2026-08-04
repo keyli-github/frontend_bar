@@ -139,7 +139,7 @@ export default function PermisosPage() {
 
   return (
     <div className="min-h-full bg-background">
-<main className="space-y-4 p-3 sm:p-4 lg:p-6">
+<div className="space-y-4 p-3 sm:p-4 lg:p-6">
         <PageHeader
           title="Permisos"
           subtitle="Catálogo de capacidades disponibles para configurar los roles."
@@ -159,7 +159,7 @@ export default function PermisosPage() {
           onRetry={reload}
           placeholder={<BoneKpis count={4} />}
         >
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard
             label="PERMISOS"
             value={String(allPermissions.length || total)}
@@ -328,7 +328,7 @@ export default function PermisosPage() {
             />
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }

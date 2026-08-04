@@ -285,7 +285,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
+    <div className="min-h-full space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
       <div className="flex flex-col gap-3 animate-fade-in-up sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Usuarios</h1>
@@ -338,7 +338,7 @@ export default function UsuariosPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Filtrar username de esta página..."
+            placeholder="Buscar en esta página..."
             className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/50"
           />
         </div>
@@ -346,6 +346,7 @@ export default function UsuariosPage() {
           value={roleFilter}
           onChange={(event) => setRoleFilter(event.target.value)}
           aria-label="Filtrar por rol"
+          title="Filtra solo la página actual"
           className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary/50"
         >
           <option value="TODOS">Todos los roles</option>
@@ -355,14 +356,15 @@ export default function UsuariosPage() {
           value={sedeFilter}
           onChange={(event) => setSedeFilter(event.target.value)}
           aria-label="Filtrar por sede"
+          title="Filtra solo la página actual"
           className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary/50"
         >
           <option value="TODAS">Todas las sedes</option>
           {sedes.map((sede) => <option key={sede.id} value={sede.id}>{sede.nombre}</option>)}
         </select>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Los filtros se aplican a los {usuarios.length} usuarios de la página cargada.
+      <p className="text-[10px] text-muted-foreground px-1">
+        Los filtros aplican solo sobre los {PAGE_SIZE} usuarios de esta página.
       </p>
 
       <div className="surface overflow-hidden animate-fade-in-up">
@@ -371,7 +373,7 @@ export default function UsuariosPage() {
             <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  {['Cuenta', 'Rol', 'Sede', 'Estado', 'Seguridad', 'Alta', 'Acciones'].map((heading) => (
+                  {['Cuenta', 'Rol', 'Sede', 'Estado', 'Alta', 'Acciones'].map((heading) => (
                     <th key={heading} className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       {heading}
                     </th>
@@ -381,7 +383,7 @@ export default function UsuariosPage() {
               <tbody className="divide-y divide-border">
                 {visibles.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                       No hay usuarios que mostrar.
                     </td>
                   </tr>
@@ -405,9 +407,6 @@ export default function UsuariosPage() {
                       <span className={cn('text-xs font-medium', usuario.activo ? 'text-success' : 'text-muted-foreground')}>
                         {usuario.activo ? 'Activo' : 'Inactivo'}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      Usa “Ver detalle” para consultar el cambio obligatorio.
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(usuario.createdAt)}</td>
                     <td className="px-4 py-3">

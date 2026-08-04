@@ -61,7 +61,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     mustChangePassword ||
     (!boneyardBuild && !canAccess(permisos, pathname))
   ) {
-    return null;
+    // Return themed background instead of null to avoid white flash during redirect
+    return <div className="h-dvh bg-background" aria-hidden="true" />;
   }
 
   return (

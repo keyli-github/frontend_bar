@@ -77,6 +77,9 @@ export default function CajaPage() {
   const effectiveSedeId = isSuperadmin ? sedeId : (user?.sedeId ?? "");
   const [caja, setCaja] = useState<CajaSesion | null>(null);
   const [movimientos, setMovimientos] = useState<CajaMovimiento[]>([]);
+  const [movPage, setMovPage] = useState(1);
+  const [movTotal, setMovTotal] = useState(0);
+  const [movTotalPages, setMovTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,9 +118,11 @@ export default function CajaPage() {
   const [medioPago, setMedioPago] = useState<CajaMedioPago>("EFECTIVO");
   const [referencia, setReferencia] = useState("");
   const [comprobante, setComprobante] = useState("");
+  const [movError, setMovError] = useState<string | null>(null);
   const [arqueoMode, setArqueoMode] = useState<ArqueoMode | null>(null);
   const [montoDeclarado, setMontoDeclarado] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [arqueoError, setArqueoError] = useState<string | null>(null);
   const loadRequestId = useRef(0);
   const historyRequestId = useRef(0);
   const detailRequestId = useRef(0);
@@ -156,6 +161,9 @@ export default function CajaPage() {
     if (!effectiveSedeId) {
       setCaja(null);
       setMovimientos([]);
+      setMovPage(1);
+      setMovTotal(0);
+      setMovTotalPages(1);
       setLoading(false);
       return;
     }
@@ -165,18 +173,23 @@ export default function CajaPage() {
       if (requestId !== loadRequestId.current) return;
 
       setCaja(current);
+      setMovPage(1);
       const page = current
-        ? await cajaApi.listMovimientosCaja(current.id, { limite: 100 })
+        ? await cajaApi.listMovimientosCaja(current.id, { pagina: 1, limite: 25 })
         : null;
       if (requestId !== loadRequestId.current) return;
 
       setMovimientos(page?.data ?? []);
+      setMovTotal(page?.total ?? 0);
+      setMovTotalPages(page?.totalPaginas ?? 1);
       setError(null);
     } catch (reason) {
       if (requestId !== loadRequestId.current) return;
 
       setCaja(null);
       setMovimientos([]);
+      setMovTotal(0);
+      setMovTotalPages(1);
       setError(errorMessage(reason, "No se pudo cargar la caja."));
     } finally {
       if (requestId === loadRequestId.current) {
@@ -194,6 +207,17 @@ export default function CajaPage() {
       cancelled = true;
     };
   }, [loadCaja]);
+
+  const irAMovPage = useCallback(async (page: number) => {
+    if (!caja) return;
+    setMovPage(page);
+    try {
+      const result = await cajaApi.listMovimientosCaja(caja.id, { pagina: page, limite: 25 });
+      setMovimientos(result.data);
+      setMovTotal(result.total);
+      setMovTotalPages(result.totalPaginas || 1);
+    } catch {}
+  }, [caja]);
 
   const loadHistory = useCallback(async () => {
     const requestId = ++historyRequestId.current;
@@ -385,14 +409,14 @@ export default function CajaPage() {
     setMedioPago("EFECTIVO");
     setReferencia("");
     setComprobante("");
-    setError(null);
+    setMovError(null);
   };
 
   const registrarMovimiento = async () => {
     if (!caja) return;
     const monto = Number(montoMovimiento);
     if (!concepto.trim() || !Number.isFinite(monto) || monto <= 0) {
-      setError("Completa el concepto y un monto mayor a cero.");
+      setMovError("Completa el concepto y un monto mayor a cero.");
       return;
     }
     const selectedMethod =
@@ -400,7 +424,7 @@ export default function CajaPage() {
     const digital =
       selectedMethod === "YAPE" || selectedMethod === "TRANSFERENCIA";
     if (digital && !comprobante.trim()) {
-      setError("Yape y transferencia requieren voucher o comprobante.");
+      setMovError("Yape y transferencia requieren voucher o comprobante.");
       return;
     }
     const tipo: CajaMovimientoTipo =
@@ -434,7 +458,7 @@ export default function CajaPage() {
       setComprobante("");
       await loadCaja();
     } catch (reason) {
-      setError(
+      setMovError(
         errorMessage(
           reason,
           `No se pudo registrar la ${movimientoMode}.`,
@@ -449,7 +473,7 @@ export default function CajaPage() {
     if (!caja || !arqueoMode) return;
     const monto = Number(montoDeclarado);
     if (!Number.isFinite(monto) || monto < 0) {
-      setError("Ingresa el efectivo contado en caja.");
+      setArqueoError("Ingresa el efectivo contado en caja.");
       return;
     }
     setSaving(true);
@@ -469,7 +493,7 @@ export default function CajaPage() {
       setObservaciones("");
       await loadCaja();
     } catch (reason) {
-      setError(errorMessage(reason, "No se pudo completar el arqueo."));
+      setArqueoError(errorMessage(reason, "No se pudo completar el arqueo."));
     } finally {
       setSaving(false);
     }
@@ -576,9 +600,28 @@ export default function CajaPage() {
             name="caja-actual"
             loading={loading}
             onRetry={() => void loadCaja()}
-            placeholder={<CajaCurrentSkeleton />}
+            placeholder={
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border bg-card p-3">
+                  <Bone className="h-4 w-32" />
+                  <Bone className="mt-2 h-3 w-48" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <div key={i} className="rounded-lg border border-border bg-muted/20 p-2">
+                      <Bone className="h-3 w-full" />
+                      <Bone className="mt-1.5 h-7 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5">
+                  <Bone className="h-3 w-28" />
+                  <Bone className="mt-1 h-6 w-24" />
+                </div>
+              </div>
+            }
           >
-            <div className="space-y-4">
+          <div className="space-y-4">
         {error && (
           <p
             role="alert"
@@ -713,7 +756,7 @@ export default function CajaPage() {
                 {canPreclose && (
                   <button
                     type="button"
-                    onClick={() => setArqueoMode("precuadre")}
+                    onClick={() => { setArqueoError(null); setArqueoMode("precuadre"); }}
                     className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/25 px-3 text-xs font-semibold text-amber-500 transition-colors hover:bg-amber-500/10"
                   >
                     <Calculator size={14} /> Precuadre
@@ -722,7 +765,7 @@ export default function CajaPage() {
                 {canClose && (
                   <button
                     type="button"
-                    onClick={() => setArqueoMode("cierre")}
+                    onClick={() => { setArqueoError(null); setArqueoMode("cierre"); }}
                     className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/25 px-3 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10"
                   >
                     <LockKeyhole size={14} /> Cerrar
@@ -859,12 +902,22 @@ export default function CajaPage() {
                   </table>
                 </div>
               )}
+              <div className="border-t border-border px-4">
+                <Pagination
+                  page={movPage}
+                  totalPages={movTotalPages}
+                  total={movTotal}
+                  pageSize={25}
+                  onPageChange={irAMovPage}
+                />
+              </div>
             </section>
           </>
         )}
             </div>
           </Bones>
         )}
+
 
         {activeTab === "historial" && (
           <section className="overflow-hidden rounded-xl border border-border bg-card">
@@ -1078,6 +1131,14 @@ export default function CajaPage() {
           onClose={() => !saving && setShowMovimiento(false)}
         >
           <div className="space-y-3">
+            {movError && (
+              <p
+                role="alert"
+                className="rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {movError}
+              </p>
+            )}
             <p className="rounded-xl border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
               {movimientoMode === "entrada"
                 ? "Las entradas representan dinero físico que ingresó a la caja, por eso su método es únicamente EFECTIVO."
@@ -1185,6 +1246,14 @@ export default function CajaPage() {
           }
           onClose={() => !saving && setArqueoMode(null)}
         >
+          {arqueoError && (
+            <p
+              role="alert"
+              className="mb-4 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {arqueoError}
+            </p>
+          )}
           <p className="mb-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
             Saldo esperado:{" "}
             <strong className="text-amber-500">
@@ -1206,6 +1275,19 @@ export default function CajaPage() {
                 placeholder="0.00"
               />
             </Field>
+            {montoDeclarado !== '' && !isNaN(Number(montoDeclarado)) && caja && (
+              <div
+                className={cn(
+                  'flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold',
+                  Number(montoDeclarado) - caja.resumen.saldoEsperado >= 0
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : 'bg-red-500/10 text-red-500',
+                )}
+              >
+                <span>Diferencia</span>
+                <span>{formatCurrency(Number(montoDeclarado) - caja.resumen.saldoEsperado)}</span>
+              </div>
+            )}
             {arqueoMode === "cierre" && (
               <Field label="Observaciones (opcional)">
                 <textarea
@@ -1236,28 +1318,6 @@ export default function CajaPage() {
           </div>
         </ModalShell>
       )}
-    </div>
-  );
-}
-
-function CajaCurrentSkeleton() {
-  return (
-    <div className="space-y-4" aria-label="Cargando caja actual" role="status">
-      <div className="rounded-xl border border-border bg-card p-3">
-        <Bone className="h-4 w-32" />
-        <Bone className="mt-2 h-3 w-64" />
-      </div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="rounded-xl border border-border bg-card p-3">
-            <Bone className="h-2.5 w-20" />
-            <Bone className="mt-2 h-5 w-28" />
-          </div>
-        ))}
-      </div>
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <BoneTable rows={6} cols={7} />
-      </div>
     </div>
   );
 }

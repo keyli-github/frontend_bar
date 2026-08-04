@@ -83,7 +83,8 @@ export default function PerfilPage() {
         isAuthenticated: false,
         mustChangePassword: false,
       });
-      router.replace('/login');
+      toast.success('Contraseña actualizada. Cerrando sesión...');
+      setTimeout(() => router.replace('/login'), 1500);
     } catch (err) {
       setPassError(
         err instanceof ApiError ? err.message : 'No se pudo cambiar la contraseña.',
@@ -140,7 +141,7 @@ export default function PerfilPage() {
   return (
     <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
       {/* ── Cabecera ── */}
-      <div className="surface p-6 lg:p-8 animate-fade-in-up">
+      <div className="surface p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
           <div className="relative group">
             <div className="relative w-24 h-24 rounded-full overflow-hidden bg-primary flex items-center justify-center text-2xl font-bold text-white flex-shrink-0">
@@ -190,8 +191,7 @@ export default function PerfilPage() {
       <div className="grid lg:grid-cols-2 gap-5">
         {/* ── Datos de cuenta ── */}
         <div
-          className="surface p-5 lg:p-6 space-y-5 animate-fade-in-up"
-          style={{ animationDelay: '60ms' }}
+          className="surface p-5 lg:p-6 space-y-5"
         >
           <div>
             <h2 className="font-semibold text-foreground text-base">Información de cuenta</h2>
@@ -244,8 +244,7 @@ export default function PerfilPage() {
         {/* ── Cambio de contrasena ── */}
         <form
           onSubmit={handleChangePassword}
-          className="surface p-5 lg:p-6 space-y-5 animate-fade-in-up"
-          style={{ animationDelay: '120ms' }}
+          className="surface p-5 lg:p-6 space-y-5"
         >
           <div>
             <h2 className="font-semibold text-foreground text-base">Cambiar contraseña</h2>

@@ -250,7 +250,7 @@ export default function AsistenciaPage() {
     <div className="min-h-full" style={{ backgroundColor: 'var(--background)' }}>
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         {/* Header */}
-        <div className="flex flex-col gap-3 animate-fade-in-up lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between animate-fade-in-up">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Asistencia</h1>
             <p className="mt-1 text-sm capitalize text-muted-foreground">

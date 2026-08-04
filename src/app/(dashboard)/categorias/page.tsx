@@ -186,7 +186,7 @@ export default function CategoriasPage() {
   }
 
   return (
-    <main className="min-h-full space-y-5 bg-background p-3 sm:p-4 lg:p-6">
+    <div className="min-h-full space-y-5 bg-background p-3 sm:p-4 lg:p-6">
       <PageHeader
         title="Categorías"
         subtitle="Catálogo global utilizado por productos e inventario."
@@ -410,6 +410,6 @@ export default function CategoriasPage() {
         onClose={() => !saving && setDeleteTarget(null)}
         onConfirm={() => void confirmDelete()}
       />
-    </main>
+    </div>
   );
 }
