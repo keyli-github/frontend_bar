@@ -327,6 +327,19 @@
 }
 
 /* ================================================================
+   NATIVE SELECT COLOR-SCHEME
+   Le indica al browser que renderice el popup nativo de <select>
+   en modo claro u oscuro según el tema activo, resolviendo el fondo
+   gris-blanco que aparece en modo oscuro en Chrome/Edge/Safari.
+   ================================================================ */
+select {
+  color-scheme: light;
+}
+.dark select {
+  color-scheme: dark;
+}
+
+/* ================================================================
    MODAL SCROLLBAR — re-enables a thin, styled scrollbar for modal
    dialogs so users can see when content overflows.
    Overrides the global scrollbar-width:none above via higher
