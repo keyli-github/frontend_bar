@@ -25,6 +25,13 @@ import { ApiError, cajaApi } from "@/lib/api";
 import { listEstablecimientos } from "@/lib/api/establecimientos.api";
 import { formatCurrency } from "@/lib/format";
 import { hasPermission } from "@/lib/roles";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import type { Establecimiento } from "@/types/api";
@@ -406,7 +413,7 @@ export default function CajaPage() {
     setShowMovimiento(true);
     setConcepto("");
     setMontoMovimiento("");
-    setMedioPago("EFECTIVO");
+    setMedioPago(mode === "salida" ? "YAPE" : "EFECTIVO");
     setReferencia("");
     setComprobante("");
     setMovError(null);
@@ -1177,25 +1184,30 @@ export default function CajaPage() {
                     EFECTIVO
                   </div>
                 ) : (
-                  <select
+                  <Select
                     value={medioPago}
-                    onChange={(event) =>
-                      setMedioPago(event.target.value as CajaMedioPago)
+                    onValueChange={(value) =>
+                      setMedioPago(value as CajaMedioPago)
                     }
-                    className={FIELD_CLASS}
                   >
-                    {(
-                      [
-                        "EFECTIVO",
-                        "YAPE",
-                        "TRANSFERENCIA",
-                        "TARJETA",
-                        "OTRO",
-                      ] as const
-                    ).map((method) => (
-                      <option key={method}>{method}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-9 w-full rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-foreground outline-none transition-colors focus:border-amber-500/60 focus-visible:ring-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(
+                        [
+                          "YAPE",
+                          "TRANSFERENCIA",
+                          "TARJETA",
+                          "OTRO",
+                        ] as const
+                      ).map((method) => (
+                        <SelectItem key={method} value={method} className="text-xs">
+                          {method}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </Field>
             </div>
