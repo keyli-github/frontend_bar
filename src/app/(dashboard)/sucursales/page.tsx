@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Pagination } from '@/components/shared/pagination';
 import { ModalShell } from '@/components/shared/modal-shell';
-import { Bones, BoneCards, BoneList } from '@/components/shared/bones';
+import { Bone, Bones, BoneCards, BoneKpis, BoneList } from '@/components/shared/bones';
 import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
 import { useAuthStore } from '@/store/auth-store';
 import { establecimientosApi, ApiError } from '@/lib/api';
@@ -89,12 +89,10 @@ export default function SucursalesPage() {
   }, [canRead, pagina, reloadToken]);
 
   const recargar = useCallback(() => {
-    setLoading(true);
     setReloadToken((token) => token + 1);
   }, []);
 
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
@@ -150,9 +148,9 @@ export default function SucursalesPage() {
       <div className="flex flex-col gap-3 animate-fade-in-up sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Sucursales</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {total} sede{total === 1 ? '' : 's'} en tu ámbito
-          </p>
+          <div className="mt-1 text-sm text-muted-foreground">
+            {loading ? <Bone className="h-3.5 w-32" /> : <>{total} sede{total === 1 ? '' : 's'} en tu ámbito</>}
+          </div>
         </div>
         {canCreate && (
           <button
@@ -171,6 +169,7 @@ export default function SucursalesPage() {
         </p>
       )}
 
+      <Bones name="sucursales-kpis" loading={loading} onRetry={recargar} placeholder={<BoneKpis count={4} />}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
         {[
           { label: 'SEDES TOTALES', value: total, icon: <Building2 size={16} />, color: 'text-foreground' },
@@ -187,8 +186,9 @@ export default function SucursalesPage() {
           </div>
         ))}
       </div>
+      </Bones>
 
-      <Bones name="sucursales-grid" loading={loading} placeholder={<BoneCards count={4} />}>
+      <Bones name="sucursales-grid" loading={loading} onRetry={recargar} placeholder={<BoneCards count={4} />}>
         {sedes.length === 0 ? (
           <p className="text-sm text-muted-foreground">No hay sedes registradas.</p>
         ) : (

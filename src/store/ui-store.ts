@@ -14,26 +14,19 @@ interface UIState {
    * navegacion sin necesidad de sincronizarlo con un efecto.
    */
   expandedModules: Record<string, boolean>;
-  /** Filtro visual para módulos mock que todavía no tienen API. */
-  selectedSede: string;
-
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   toggleCollapsed: () => void;
   toggleModule: (id: string, open: boolean) => void;
-  setSelectedSede: (sede: string) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   sidebarOpen: false,
   sidebarCollapsed: false,
   expandedModules: {},
-  selectedSede: 'Todas',
-
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleModule: (id, open) =>
     set((s) => ({ expandedModules: { ...s.expandedModules, [id]: open } })),
-  setSelectedSede: (selectedSede) => set({ selectedSede }),
 }));

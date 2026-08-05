@@ -9,73 +9,13 @@ import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import { canAccess, getRoleLabel } from "@/lib/roles";
-import { NAV_MODULES as API_NAV_MODULES, NAV_ROOT } from "@/lib/navigation";
+import { NAV_MODULES, NAV_ROOT } from "@/lib/navigation";
 import {
-  BarChart3,
   ChevronDown,
-  ClipboardList,
-  FileText,
-  Landmark,
-  Package,
   PanelLeftClose,
   PanelLeftOpen,
-  ShieldCheck,
-  Tags,
-  Truck,
-  UtensilsCrossed,
   X,
 } from "lucide-react";
-
-interface SidebarNavItem {
-  name: string;
-  href: string;
-  icon: React.ElementType;
-}
-
-interface SidebarNavModule {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  items: SidebarNavItem[];
-}
-
-const NAV_MODULES: SidebarNavModule[] = [
-  {
-    id: "ventas",
-    label: "Caja",
-    icon: BarChart3,
-    items: [{ name: "Caja", href: "/caja", icon: Landmark }],
-  },
-  {
-    id: "inventario",
-    label: "Inventario",
-    icon: Package,
-    items: [
-      { name: "Productos", href: "/productos", icon: UtensilsCrossed },
-      { name: "Categorías", href: "/categorias", icon: Tags },
-      { name: "Inventario", href: "/inventario", icon: Package },
-      { name: "Kardex", href: "/kardex", icon: FileText },
-      { name: "Compras", href: "/compras", icon: Truck },
-    ],
-  },
-  {
-    id: "personal",
-    label: "Personal",
-    icon: ClipboardList,
-    items: [{ name: "Asistencia", href: "/asistencia", icon: ClipboardList }],
-  },
-  ...API_NAV_MODULES.map((module) =>
-    module.id === "admin"
-      ? {
-          ...module,
-          items: [
-            ...module.items,
-            { name: "Seguridad", href: "/seguridad", icon: ShieldCheck },
-          ],
-        }
-      : module,
-  ),
-];
 
 /** Contenedor de acordeon animado por altura, sin JS de medicion. */
 function AccordionContent({
@@ -94,9 +34,14 @@ function AccordionContent({
       id={id}
       role="region"
       aria-labelledby={labelledBy}
-      hidden={!open}
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
       className="overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out"
-      style={{ maxHeight: open ? "24rem" : "0", opacity: open ? 1 : 0 }}
+      style={{
+        maxHeight: open ? "24rem" : "0",
+        opacity: open ? 1 : 0,
+        pointerEvents: open ? undefined : 'none',
+      }}
     >
       {children}
     </div>
@@ -270,6 +215,35 @@ export function Sidebar() {
               canAccess(permisos, i.href),
             );
             if (visibleItems.length === 0) return null;
+
+            // Single-item group: render as direct link, skip accordion overhead
+            if (visibleItems.length === 1) {
+              const item = visibleItems[0];
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <div key={mod.id} className="mb-0.5">
+                  {!collapsed && (
+                    <p className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35">
+                      {mod.label}
+                    </p>
+                  )}
+                  <Link
+                    href={item.href}
+                    onClick={closeOnMobile}
+                    title={collapsed ? item.name : undefined}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      itemBase,
+                      collapsed && "justify-center px-0",
+                      active ? itemActive : itemIdle,
+                    )}
+                  >
+                    <item.icon size={18} className="shrink-0" aria-hidden="true" />
+                    {!collapsed && <span className="truncate">{item.name}</span>}
+                  </Link>
+                </div>
+              );
+            }
 
             const isActive = visibleItems.some(
               (item) =>

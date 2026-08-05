@@ -1,29 +1,92 @@
 'use client';
 
 /**
- * Skeletons granulares.
+ * Sistema de estados de carga con duración mínima de skeleton.
  *
- * Cada region de datos se envuelve en `<Bones>`, no la pagina entera: la
- * cabecera aparece de inmediato y solo el bloque que espera al API muestra
- * huesos.
- *
- * Regla del proyecto: durante una carga NUNCA se pinta texto ("Cargando…").
- * `<Bones>` lo garantiza porque el `placeholder` cumple dos funciones:
- *   1. Es el respaldo CSS cuando todavia no existe `.bones.json` capturado
- *      (proyecto recien clonado, antes de `npm run bones`).
- *   2. Ocupa el alto real del bloque mientras Boneyard superpone los huesos
- *      pixel-perfect; sin contenido debajo, el overlay se colapsaria a 0px.
+ * Comportamiento de `<Bones>`:
+ *   - El skeleton aparece en el PRIMER frame cuando loading=true.
+ *   - Permanece visible al menos MIN_SKELETON_MS (2 s) aunque la API
+ *     responda antes. Así el usuario lo percibe como un estado intencional
+ *     y no como un parpadeo.
+ *   - La transición skeleton→contenido usa un crossfade de 200 ms:
+ *     la ESTRUCTURA (tarjetas, botones, encabezados) no se mueve —
+ *     solo los valores numéricos/textuales actualizan.
+ *   - A los 3 s muestra un aviso de lentitud.
+ *   - A los 10 s muestra estado de timeout con "Reintentar".
  */
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Skeleton as BoneyardSkeleton } from 'boneyard-js/react';
 import { cn } from '@/lib/utils';
+import {
+  SlowLoadingBanner,
+  TimeoutState,
+  RefreshSpinner,
+} from './loading-states';
 
-/** Bloque individual con animacion de pulso. */
+// ─── Umbrales ─────────────────────────────────────────────────────────────────
+const MIN_SKELETON_MS = 2_000;  // ms mínimos que el skeleton permanece visible
+const T_SLOW          = 3_000;  // ms → banner "tardando más de lo esperado"
+const T_TIMEOUT       = 10_000; // ms → timeout con botón "Reintentar"
+
+type Phase = 'content' | 'skeleton' | 'slow' | 'timeout';
+
+function useLoadPhase(loading: boolean): Phase {
+  // Inicializar directamente en 'skeleton' cuando loading=true en el montaje,
+  // para que el skeleton aparezca en el PRIMER frame sin ningún delay.
+  const [phase, setPhase] = useState<Phase>(loading ? 'skeleton' : 'content');
+
+  // Registra el momento exacto en que el skeleton empezó a mostrarse.
+  // Inicializar a null; el efecto lo asigna en el primer render si loading=true.
+  const skeletonStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (loading) {
+      // Si vuelve a cargar (ej. refresh), registrar nuevo tiempo de inicio.
+      // También cubre el caso de montaje inicial con loading=true.
+      if (skeletonStartRef.current === null) {
+        skeletonStartRef.current = Date.now();
+      }
+      const t2 = setTimeout(() => setPhase('slow'),    T_SLOW);
+      const t3 = setTimeout(() => setPhase('timeout'), T_TIMEOUT);
+      return () => { clearTimeout(t2); clearTimeout(t3); };
+    }
+
+    // La API respondió. Calcular cuánto falta para completar los 2 s mínimos.
+    const start    = skeletonStartRef.current;
+    skeletonStartRef.current = null;
+
+    if (start === null) {
+      // Nunca estuvo en modo skeleton — pasar a contenido directamente.
+      const t = setTimeout(() => setPhase('content'), 0);
+      return () => clearTimeout(t);
+    }
+
+    const elapsed   = Date.now() - start;
+    const remaining = Math.max(0, MIN_SKELETON_MS - elapsed);
+
+    // Esperar el tiempo restante antes de mostrar el contenido real.
+    const t = setTimeout(() => setPhase('content'), remaining);
+    return () => clearTimeout(t);
+  }, [loading]);
+
+  return phase;
+}
+
+// ─── Bone ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Bloque de placeholder con animación de pulso suave — igual que Frank.
+ */
 export function Bone({ className }: { className?: string }) {
   return (
-    <div aria-hidden="true" className={cn('animate-pulse rounded-md bg-muted', className)} />
+    <div
+      aria-hidden="true"
+      className={cn('animate-pulse rounded-md bg-muted', className)}
+    />
   );
 }
+
+// ─── Bones ────────────────────────────────────────────────────────────────────
 
 export function Bones({
   name,
@@ -31,26 +94,53 @@ export function Bones({
   placeholder,
   children,
   className,
+  onRetry,
+  refreshing = false,
 }: {
-  /** Debe coincidir con el nombre capturado en `src/bones/`. */
+  /** Nombre del snapshot capturado en `src/bones/`. */
   name: string;
   loading: boolean;
   placeholder: ReactNode;
   children: ReactNode;
   className?: string;
+  /**
+   * Función invocada al pulsar "Reintentar" cuando la carga supera
+   * los 10 segundos. Si no se provee, el botón no aparece.
+   */
+  onRetry?: () => void;
+  /**
+   * Cuando ya hay datos visibles y se actualiza en segundo plano,
+   * pasa `refreshing={true}` para mostrar un spinner discreto sin
+   * reemplazar el contenido existente.
+   */
+  refreshing?: boolean;
 }) {
+  const phase = useLoadPhase(loading);
+
+  // Tiempo agotado: reemplaza el esqueleto por el estado de error recuperable.
+  if (phase === 'timeout') {
+    return <TimeoutState onRetry={onRetry} />;
+  }
+
+  const showSkeleton = phase === 'skeleton' || phase === 'slow';
+
   return (
-    <BoneyardSkeleton
-      name={name}
-      loading={loading}
-      /* Los huesos se capturan por ancho de viewport, no de contenedor. */
-      select="viewport"
-      transition={200}
-      className={className}
-      fallback={placeholder}
-    >
-      {loading ? placeholder : children}
-    </BoneyardSkeleton>
+    <div className={cn('relative', className)}>
+      {refreshing && !showSkeleton && (
+        <RefreshSpinner className="absolute right-3 top-3 z-10" />
+      )}
+      {phase === 'slow' && <SlowLoadingBanner />}
+
+      <BoneyardSkeleton
+        name={name}
+        loading={showSkeleton}
+        select="viewport"
+        transition={200}
+        fallback={placeholder}
+      >
+        {showSkeleton ? placeholder : children}
+      </BoneyardSkeleton>
+    </div>
   );
 }
 
@@ -75,7 +165,7 @@ export function BoneKpis({ count = 4 }: { count?: number }) {
   );
 }
 
-/** Tabla con cabecera y filas. Sustituye al contenedor con scroll. */
+/** Tabla con cabecera y filas. */
 export function BoneTable({
   rows = 8,
   cols = 5,
@@ -91,7 +181,10 @@ export function BoneTable({
         ))}
       </div>
       {Array.from({ length: rows }, (_, r) => (
-        <div key={r} className="flex items-center gap-4 border-b border-border px-4 py-3.5 last:border-0">
+        <div
+          key={r}
+          className="flex items-center gap-4 border-b border-border px-4 py-3.5 last:border-0"
+        >
           {Array.from({ length: cols }, (_, c) => (
             <div key={c} className="flex flex-1 items-center gap-3">
               {c === 0 && <Bone className="size-8 shrink-0 rounded-full" />}
@@ -133,7 +226,7 @@ export function BoneCards({ count = 6 }: { count?: number }) {
   );
 }
 
-/** Lista vertical con separadores (sedes, actividad, sesiones). */
+/** Lista vertical con separadores. */
 export function BoneList({
   rows = 5,
   avatar = false,
@@ -157,7 +250,7 @@ export function BoneList({
   );
 }
 
-/** Barras de progreso etiquetadas (usuarios por rol). */
+/** Barras de progreso etiquetadas. */
 export function BoneBars({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2.5">
@@ -175,15 +268,16 @@ export function BoneBars({ rows = 5 }: { rows?: number }) {
 }
 
 /**
- * Silueta del layout completo mientras se restaura la sesion.
- *
- * En esa fase todavia no se sabe si hay sesion ni que permisos trae el JWT,
- * asi que no se puede pintar el sidebar real. Un esqueleto del armazon evita
- * el salto brusco de "pantalla vacia" a "aplicacion completa".
+ * Silueta del layout completo durante la restauración de sesión.
+ * Solo aparece en hard load, no durante la navegación entre rutas.
  */
 export function BoneAppShell() {
   return (
-    <div className="flex h-dvh overflow-hidden bg-background" role="status" aria-label="Cargando sesión">
+    <div
+      className="flex h-dvh overflow-hidden bg-background"
+      role="status"
+      aria-label="Cargando sesión"
+    >
       <aside className="hidden w-[17rem] shrink-0 flex-col gap-6 border-r border-sidebar-border bg-sidebar p-4 lg:flex">
         <Bone className="h-8 w-32" />
         <div className="space-y-2">
@@ -223,7 +317,7 @@ export function BoneAppShell() {
   );
 }
 
-/** Catalogo agrupado por modulo (permisos). */
+/** Catálogo agrupado por módulo (permisos). */
 export function BoneCatalogo({
   groups = 3,
   items = 4,
@@ -241,7 +335,10 @@ export function BoneCatalogo({
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: items }, (_, i) => (
-              <div key={i} className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+              <div
+                key={i}
+                className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3"
+              >
                 <Bone className="h-3 w-32" />
                 <Bone className="h-2.5 w-full" />
                 <Bone className="h-2 w-16" />
@@ -252,4 +349,9 @@ export function BoneCatalogo({
       ))}
     </div>
   );
+}
+
+/** Placeholder para el área de gráficas del dashboard. */
+export function BoneChartArea() {
+  return <div className="surface h-[290px] bg-border/20" />;
 }

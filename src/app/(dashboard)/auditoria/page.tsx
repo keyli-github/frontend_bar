@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   User,
 } from 'lucide-react';
-import { Bones, BoneTable } from '@/components/shared/bones';
+import { Bone, Bones, BoneKpis, BoneTable } from '@/components/shared/bones';
 import { DatePicker } from '@/components/shared/date-picker';
 import { ModalShell } from '@/components/shared/modal-shell';
 import { PageHeader } from '@/components/shared/page-header';
@@ -23,7 +23,7 @@ import { Pagination } from '@/components/shared/pagination';
 import { SearchBar } from '@/components/shared/search-bar';
 import { StatCard } from '@/components/shared/stat-card';
 import { useBoneyardBuild } from '@/hooks/use-boneyard-build';
-import { ApiError, auditApi } from '@/lib/api';
+import { ApiError, auditApi, establecimientosApi } from '@/lib/api';
 import { hasPermission } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth-store';
@@ -100,6 +100,17 @@ export default function AuditoriaPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<AuditLog | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [sedes, setSedes] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    establecimientosApi.listEstablecimientos({ limite: 100 })
+      .then((res) => {
+        const map: Record<string, string> = {};
+        res.data.forEach((s) => { map[s.id] = s.nombre; });
+        setSedes(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
 
@@ -137,13 +148,14 @@ export default function AuditoriaPage() {
     };
   }, [filtersKey, page, reloadToken]);
 
+  const reload = useCallback(() => setReloadToken((v) => v + 1), []);
+
   const applyFilters = useCallback(() => {
     const next: AuditQuery = {};
     if (actionDraft.trim()) next.accion = actionDraft.trim().toUpperCase();
     if (entityDraft.trim()) next.entidad = entityDraft.trim();
     if (dateFrom) next.desde = toApiDate(dateFrom);
     if (dateTo) next.hasta = toApiDate(dateTo, true);
-    setLoading(true);
     setPage(1);
     setFilters(next);
     setReloadToken((value) => value + 1);
@@ -154,14 +166,12 @@ export default function AuditoriaPage() {
     setEntityDraft('');
     setDateFrom(undefined);
     setDateTo(undefined);
-    setLoading(true);
     setPage(1);
     setFilters({});
     setReloadToken((value) => value + 1);
   }, []);
 
   const goToPage = useCallback((nextPage: number) => {
-    setLoading(true);
     setPage(nextPage);
   }, []);
 
@@ -192,8 +202,8 @@ export default function AuditoriaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-<main className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
+    <div className="min-h-full bg-background">
+<div className="space-y-4 p-3 sm:p-4 lg:space-y-5 lg:p-6">
         <PageHeader
           title="Registro de auditoría"
           subtitle="Trazabilidad de accesos y cambios administrativos del sistema"
@@ -205,7 +215,8 @@ export default function AuditoriaPage() {
           )}
         />
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Bones name="auditoria-kpis" loading={loading} onRetry={reload} placeholder={<BoneKpis count={4} />}>
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard
             label="Eventos registrados"
             value={String(total)}
@@ -234,6 +245,7 @@ export default function AuditoriaPage() {
             valueColor="text-red-600 dark:text-red-400"
           />
         </section>
+        </Bones>
 
         <section className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
@@ -301,13 +313,13 @@ export default function AuditoriaPage() {
           </p>
         )}
 
-        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm animate-fade-in-up">
           <div className="flex flex-col gap-1 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Historial de actividad</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {total} {total === 1 ? 'evento coincide' : 'eventos coinciden'} con la consulta
-              </p>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                {loading ? <Bone className="h-3 w-52" /> : <>{total} {total === 1 ? 'evento coincide' : 'eventos coinciden'} con la consulta</>}
+              </div>
             </div>
             <div className="mt-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground sm:mt-0">
               <ShieldCheck size={13} className="text-emerald-500" />
@@ -318,6 +330,7 @@ export default function AuditoriaPage() {
           <Bones
             name="auditoria-tabla"
             loading={loading}
+            onRetry={reload}
             placeholder={<BoneTable rows={10} cols={7} />}
           >
             <div className="overflow-x-auto">
@@ -378,8 +391,14 @@ export default function AuditoriaPage() {
                           {log.userAgent ?? 'User-agent no disponible'}
                         </p>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {log.sedeId ?? 'Global'}
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {log.sedeId ? (
+                          <span title={log.sedeId} className="text-xs">
+                            {sedes[log.sedeId] ?? log.sedeId.slice(0, 8) + '…'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Global</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -419,7 +438,7 @@ export default function AuditoriaPage() {
             />
           </div>
         </section>
-      </main>
+      </div>
 
       <ModalShell
         open={Boolean(selectedEvent)}
@@ -508,7 +527,7 @@ function AuditEventDetail({ event }: { event: AuditLog }) {
               application/json
             </span>
           </div>
-          <pre className="max-h-56 overflow-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-xs leading-5 text-emerald-300 shadow-inner">
+          <pre className="max-h-56 overflow-y-auto rounded-xl border border-border bg-muted p-4 font-mono text-xs leading-5 text-foreground">
             {JSON.stringify(event.detalle, null, 2)}
           </pre>
         </div>

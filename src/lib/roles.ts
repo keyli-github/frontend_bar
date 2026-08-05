@@ -101,8 +101,6 @@ export function hasAnyPermission(
 export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   "/dashboard": null,
   "/perfil": null,
-  // Respaldada por `GET/DELETE /auth/sesiones`: solo exige sesion valida,
-  // no un permiso concreto (igual que /perfil).
   "/seguridad": null,
   "/caja": "caja:leer",
   "/categorias": "categorias:leer",

@@ -70,11 +70,23 @@
 }
 
 /* ================================================================
+   ESCALA DE Z-INDEX GLOBAL
+   Contenido:       0
+   Header/Sidebar:  20-30
+   Dropdowns:       40
+   Overlay modal:   80
+   ModalShell:      100
+   ConfirmModal:    110
+   Toast/Sonner:    120
+   ================================================================ */
+
+/* ================================================================
    MODO CLARO  — todo #ffffff, sin grises
    ================================================================ */
 :root {
-  /* Fondos: blanco puro en hex para máxima compatibilidad */
-  --background:        #ffffff;
+  /* Fondos: fondo ligeramente azulado para que las cards blancas
+     "floten" sobre él sin depender solo de la sombra */
+  --background:        #f5f7fb;
   --card:              #ffffff;
   --popover:           #ffffff;
   --sidebar:           #ffffff;
@@ -94,10 +106,11 @@
   --primary-foreground:#1a1206;
   --primary-text:      #b45309;
 
-  /* Secundario / muted — gris muy suave solo para inputs y zonas muted */
-  --secondary:              #f4f4f6;
+  /* Secundario / muted — gris sutilmente más oscuro que el fondo para
+     distinguirse del background #f5f7fb sin chocar con las cards blancas */
+  --secondary:              #f0f2f7;
   --secondary-foreground:   #111118;
-  --muted:                  #f4f4f6;
+  --muted:                  #f0f2f7;
   --muted-foreground:       #6b7280;
   --accent:                 #f4f4f6;
   --accent-foreground:      #111118;
@@ -156,24 +169,40 @@
 
 /* ================================================================
    MODO OSCURO
+   Paleta: negro-gris con tinte azul marino, inspirada en dashboards
+   profesionales de referencia.
    ================================================================ */
 .dark {
-  --background:  #0a0a12;
-  --foreground:  #f5f5fa;
-  --card:        #12121a;
-  --card-foreground: #f5f5fa;
-  --popover:     #1a1a24;
-  --popover-foreground: #f5f5fa;
-  --primary:     #f59e0b;
-  --primary-foreground: #111118;
-  --primary-text:       #fbbf24;
-  --secondary:   #1e1e2a;
-  --secondary-foreground: #f5f5fa;
-  --muted:       #1e1e2a;
-  --muted-foreground: #8b8b9e;
-  --accent:      #f59e0b;
-  --accent-foreground: #111118;
+  /* ── Fondos ──────────────────────────────────────────────────
+     background   → negro casi puro
+     card         → gris muy oscuro, distinguible del fondo
+     popover      → modales/dropdowns, un paso encima de card
+     sidebar      → negro puro, más oscuro que el fondo */
+  --background:  #0b0b0d;
+  --card:        #131316;
+  --popover:     #1b1b21;
+  --sidebar:     #080809;
 
+  /* ── Texto ── */
+  --foreground:        #e8eaf2;
+  --card-foreground:   #e8eaf2;
+  --popover-foreground:#e8eaf2;
+  --sidebar-foreground:#c9ccdb;
+
+  /* ── Primario — ámbar (sin cambio) ── */
+  --primary:           #f59e0b;
+  --primary-foreground:#111118;
+  --primary-text:      #fbbf24;
+
+  /* ── Muted / secondary ── */
+  --secondary:              #181820;
+  --secondary-foreground:   #e8eaf2;
+  --muted:                  #181820;
+  --muted-foreground:       #7e839e;
+  --accent:                 #f59e0b;
+  --accent-foreground:      #111118;
+
+  /* ── Semánticos ── */
   --success:            #10b981;
   --success-foreground: #04140e;
   --warning:            #f59e0b;
@@ -185,27 +214,30 @@
   --special:                #c084fc;
   --special-foreground:     #170b26;
 
-  --border:      rgba(255, 255, 255, 0.08);
+  /* ── Bordes — blancos muy sutiles para que las cards se distingan ── */
+  --border:      rgba(255, 255, 255, 0.09);
   --input:       rgba(255, 255, 255, 0.10);
   --ring:        #f59e0b;
-  --sidebar:           #0d0d16;
-  --sidebar-foreground:#f5f5fa;
-  --sidebar-primary:   #f59e0b;
+
+  /* ── Sidebar ── */
+  --sidebar-primary:            #f59e0b;
   --sidebar-primary-foreground: #111118;
-  --sidebar-accent:    #1e1e2a;
-  --sidebar-accent-foreground: #f5f5fa;
-  --sidebar-border:    rgba(255, 255, 255, 0.08);
-  --sidebar-ring:      #f59e0b;
+  --sidebar-accent:             #181820;
+  --sidebar-accent-foreground:  #e8eaf2;
+  --sidebar-border:             rgba(255, 255, 255, 0.07);
+  --sidebar-ring:               #f59e0b;
+
+  /* ── Gráficas ── */
   --chart-1: #f59e0b;
   --chart-2: #60a5fa;
   --chart-3: #10b981;
   --chart-4: #c084fc;
   --chart-5: #fb923c;
 
-  /* En oscuro la separacion la da el borde, no la sombra */
-  --elevation-1: 0 0 0 1px rgb(255 255 255 / 0.06);
-  --elevation-2: 0 2px 8px -2px rgb(0 0 0 / 0.50), 0 0 0 1px rgb(255 255 255 / 0.07);
-  --elevation-3: 0 12px 32px -8px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.09);
+  /* En oscuro la separación la da el borde, no la sombra */
+  --elevation-1: 0 0 0 1px rgb(255 255 255 / 0.07);
+  --elevation-2: 0 2px 10px -2px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
+  --elevation-3: 0 12px 32px -8px rgb(0 0 0 / 0.70), 0 0 0 1px rgb(255 255 255 / 0.10);
 }
 
 /* ================================================================
@@ -263,16 +295,62 @@
 }
 
 /* ================================================================
-   SCROLLBAR
+   SCROLLBAR — ocultar barra visual en todos los navegadores.
+   Duplicado dentro y fuera de @layer para ganar a cualquier
+   utilidad de Tailwind (overflow-*) que tenga mayor cascada.
    ================================================================ */
 @layer base {
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.30); }
-  .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
-  .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
+
+/* Reglas fuera de capa: mayor especificidad que @layer base.
+   Garantizan que los contenedores con overflow-auto / overflow-x-auto
+   no muestren barra aunque Tailwind los declare en @layer utilities. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* ================================================================
+   MODAL SCROLLBAR — re-enables a thin, styled scrollbar for modal
+   dialogs so users can see when content overflows.
+   Overrides the global scrollbar-width:none above via higher
+   specificity (class selector beats universal selector).
+   ================================================================ */
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 16%, transparent) transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 9999px;
+}
+
 
 /* ================================================================
    ANIMACIONES
@@ -299,6 +377,7 @@
 .animate-scale-in    { animation: scaleIn 0.28s ease-out forwards; }
 .animate-slide-in-up { animation: slideInUp 0.32s ease-out forwards; }
 
+/* Stagger: aparición escalonada de tarjetas y bloques (igual que Frank) */
 .stagger-children > * { opacity: 0; animation: fadeInUp 0.38s ease-out forwards; }
 .stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
 .stagger-children > *:nth-child(2)  { animation-delay: 55ms; }
@@ -314,7 +393,7 @@
 /* ================================================================
    ACCESIBILIDAD DE MOVIMIENTO
    Respeta la preferencia del sistema: sin esto las animaciones
-   stagger provocan mareo a usuarios sensibles al movimiento.
+   provocan mareo a usuarios sensibles al movimiento.
    ================================================================ */
 @media (prefers-reduced-motion: reduce) {
   *,

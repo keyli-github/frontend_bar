@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 
 import { ConfirmModal } from '@/components/shared/confirm-modal';
+import { BoneKpis, BoneList, Bones } from '@/components/shared/bones';
 import { PageHeader } from '@/components/shared/page-header';
 import { StatCard } from '@/components/shared/stat-card';
 import { authApi, ApiError } from '@/lib/api';
@@ -103,7 +104,6 @@ export default function SeguridadPage() {
   }, [reloadToken]);
 
   const recargar = useCallback(() => {
-    setLoading(true);
     setReloadToken((n) => n + 1);
   }, []);
 
@@ -145,7 +145,7 @@ export default function SeguridadPage() {
       : '';
 
   return (
-    <div className="min-h-screen bg-background"><main className="space-y-4 p-3 sm:p-4 lg:p-6">
+    <div className="min-h-full bg-background"><div className="space-y-4 p-3 sm:p-4 lg:p-6">
         <PageHeader
           title="Seguridad"
           subtitle="Administra tu contraseña y revisa los dispositivos conectados."
@@ -156,12 +156,14 @@ export default function SeguridadPage() {
           )}
         />
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Bones name="seguridad-kpis" loading={loading} onRetry={recargar} placeholder={<BoneKpis count={4} />}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard label="SESIONES ACTIVAS" value={String(sessions.length)} subtitle="Dispositivos conectados" icon={<MonitorSmartphone size={13} />} />
           <StatCard label="OTROS DISPOSITIVOS" value={String(otherSessions.length)} subtitle="Fuera de este equipo" icon={<Laptop size={13} />} valueColor="text-blue-500" />
           <StatCard label="SESIÓN ACTUAL" value="Activa" subtitle={currentSession?.deviceName ?? 'Sin información'} icon={<ShieldCheck size={13} />} valueColor="text-emerald-500" />
           <StatCard label="CONTRASEÑA" value="Vigente" subtitle="Política completa" icon={<KeyRound size={13} />} valueColor="text-amber-500" />
         </div>
+        </Bones>
 
         {notice && (
           <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300 animate-fade-in">
@@ -193,10 +195,14 @@ export default function SeguridadPage() {
               </button>
             </div>
 
+            <Bones
+              name="seguridad-sesiones"
+              loading={loading}
+              onRetry={recargar}
+              placeholder={<div className="px-4"><BoneList rows={4} avatar /></div>}
+            >
             <div className="divide-y divide-border">
-              {loading ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground">Cargando sesiones…</p>
-              ) : sessions.length === 0 ? (
+              {sessions.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-muted-foreground">No hay sesiones activas.</p>
               ) : (
                 sessions.map((session) => (
@@ -218,6 +224,7 @@ export default function SeguridadPage() {
                 ))
               )}
             </div>
+            </Bones>
           </section>
 
           <aside className="overflow-hidden rounded-xl border border-border bg-card">
@@ -227,7 +234,7 @@ export default function SeguridadPage() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Protección de cuenta</h2>
-                <p className="text-[10px] text-muted-foreground">4 medidas activas</p>
+                <p className="text-[10px] text-muted-foreground">{protections.length} medidas activas</p>
               </div>
             </div>
 
@@ -253,7 +260,7 @@ export default function SeguridadPage() {
             </div>
           </aside>
         </div>
-      </main>
+      </div>
 
       <ConfirmModal
         open={pendingAction !== null}

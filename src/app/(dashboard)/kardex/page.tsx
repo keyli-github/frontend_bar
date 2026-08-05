@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Pagination } from "@/components/shared/pagination";
-import { Bones, BoneTable } from "@/components/shared/bones";
+import { Bones, BoneKpis, BoneTable } from "@/components/shared/bones";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DatePicker } from "@/components/shared/date-picker";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
@@ -20,7 +20,6 @@ import type {
 } from "@/types/api";
 import {
   Search,
-  Download,
   ArrowUp,
   ArrowDown,
   Zap,
@@ -77,6 +76,8 @@ export default function KardexPage() {
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   /** Debounce de la busqueda; cualquier cambio de filtro vuelve a la pagina 1. */
   useEffect(() => {
@@ -117,11 +118,10 @@ export default function KardexPage() {
     return () => {
       cancelled = true;
     };
-  }, [canRead, pagina, debouncedSearch, activeFilter, dateFrom, dateTo]);
+  }, [canRead, pagina, debouncedSearch, activeFilter, dateFrom, dateTo, reloadKey]);
 
-  /** El spinner se activa aqui, no en el efecto, para no encadenar renders. */
+  /** Cambia de página SIN resetear loading: contenido previo permanece visible. */
   const irAPagina = useCallback((page: number) => {
-    setLoading(true);
     setPagina(page);
   }, []);
 
@@ -140,12 +140,12 @@ export default function KardexPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-full"
       style={{ backgroundColor: "var(--background)" }}
     >
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in-up">
+        <div className="animate-fade-in-up">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">
               Kardex de Inventario
@@ -154,14 +154,6 @@ export default function KardexPage() {
               Historial de movimientos de stock
             </p>
           </div>
-          <button
-            disabled
-            title="Exportación no disponible"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-muted-foreground text-sm font-medium w-fit opacity-50 cursor-not-allowed"
-          >
-            <Download size={16} />
-            Exportar
-          </button>
         </div>
 
         {error && (
@@ -174,6 +166,7 @@ export default function KardexPage() {
         )}
 
         {/* KPIs */}
+        <Bones name="kardex-kpis" loading={loading} onRetry={reload} placeholder={<BoneKpis count={4} />}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
           {[
             {
@@ -215,6 +208,7 @@ export default function KardexPage() {
             </div>
           ))}
         </div>
+        </Bones>
 
         {/* Filters bar */}
         <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up">
@@ -274,6 +268,7 @@ export default function KardexPage() {
           <Bones
             name="kardex-tabla"
             loading={loading}
+            onRetry={reload}
             placeholder={<BoneTable rows={PAGE_SIZE} cols={12} />}
           >
             {movimientos.length === 0 ? (
@@ -284,26 +279,26 @@ export default function KardexPage() {
               />
             ) : (
               <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      {[
-                        "ID",
-                        "Fecha",
-                        "Hora",
-                        "Producto",
-                        "Codigo",
-                        "Tipo",
-                        "Cant.",
-                        "Stock ant.",
-                        "Stock nuevo",
-                        "Valor",
-                        "Referencia",
-                        "Usuario",
-                      ].map((h) => (
+                      {([
+                        ["ID", "w-20"],
+                        ["Fecha", "w-24"],
+                        ["Hora", "w-16"],
+                        ["Producto", "min-w-[160px]"],
+                        ["Codigo", "w-24"],
+                        ["Tipo", "w-20"],
+                        ["Cant.", "w-20"],
+                        ["Stock ant.", "w-20"],
+                        ["Stock nuevo", "w-20"],
+                        ["Valor", "w-20"],
+                        ["Referencia", "min-w-[120px]"],
+                        ["Usuario", "w-24"],
+                      ] as [string, string][]).map(([h, w]) => (
                         <th
                           key={h}
-                          className="px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                          className={cn("px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap", w)}
                         >
                           {h}
                         </th>
@@ -318,22 +313,22 @@ export default function KardexPage() {
                           key={k.id}
                           className="hover:bg-muted/40 transition-colors"
                         >
-                          <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium">
+                          <td className="px-4 py-3 text-amber-500 font-mono text-xs font-medium w-20">
                             {k.id.slice(0, 8)}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-3 text-muted-foreground text-xs w-24">
                             {k.fecha}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-mono text-xs">
+                          <td className="px-4 py-3 text-foreground font-mono text-xs w-16">
                             {k.hora}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-medium">
+                          <td className="px-4 py-3 text-foreground font-medium min-w-[160px]">
                             {k.producto}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-3 text-muted-foreground text-xs w-24">
                             {k.codigo}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 w-20">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold",
@@ -344,7 +339,7 @@ export default function KardexPage() {
                               {k.tipo}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 w-20">
                             <span
                               className={cn(
                                 "font-bold",
@@ -364,19 +359,19 @@ export default function KardexPage() {
                               {k.cantidad} {k.unidad}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
+                          <td className="px-4 py-3 text-muted-foreground w-20">
                             {k.stockAnterior}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-semibold">
+                          <td className="px-4 py-3 text-foreground font-semibold w-20">
                             {k.stockNuevo}
                           </td>
-                          <td className="px-4 py-3 text-foreground font-mono">
+                          <td className="px-4 py-3 text-foreground font-mono w-20">
                             {formatCurrency(k.valor)}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs max-w-[120px] truncate">
+                          <td className="px-4 py-3 text-muted-foreground text-xs min-w-[120px] truncate">
                             {k.referencia}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-3 text-muted-foreground text-xs w-24">
                             {k.usuario}
                           </td>
                         </tr>

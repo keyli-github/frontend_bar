@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Boxes, Eye, KeyRound, PencilLine, Search } from 'lucide-react';
-import { Bones, BoneTable } from '@/components/shared/bones';
+import { Bone, BoneKpis, Bones, BoneTable } from '@/components/shared/bones';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
 import { SearchBar } from '@/components/shared/search-bar';
@@ -44,7 +44,7 @@ export default function PermisosPage() {
   const puedeLeer = boneyardBuild || hasPermission(permisosJwt, 'permisos:leer');
 
   const [permissions, setPermissions] = useState<Permiso[]>([]);
-  const [catalog, setCatalog] = useState<PermisosAgrupados>({});
+  const [catalog, setCatalog] = useState<PermisosAgrupados | null>(null);
   const [query, setQuery] = useState('');
   const [selectedModule, setSelectedModule] = useState('todos');
   const [page, setPage] = useState(1);
@@ -52,6 +52,8 @@ export default function PermisosPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => { setPage(1); setReloadToken((v) => v + 1); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +86,7 @@ export default function PermisosPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, selectedModule]);
+  }, [page, selectedModule, reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,8 +103,11 @@ export default function PermisosPage() {
     };
   }, []);
 
-  const modules = useMemo(() => Object.keys(catalog).sort((a, b) => a.localeCompare(b)), [catalog]);
-  const allPermissions = useMemo(() => Object.values(catalog).flat(), [catalog]);
+  const modules = useMemo(
+    () => (catalog ? Object.keys(catalog).sort((a, b) => a.localeCompare(b)) : []),
+    [catalog],
+  );
+  const allPermissions = useMemo(() => (catalog ? Object.values(catalog).flat() : []), [catalog]);
   const readPermissions = allPermissions.filter((permission) => permission.nombre.endsWith(':leer')).length;
   const normalizedQuery = query.trim().toLowerCase();
   const filteredPermissions = permissions.filter(
@@ -113,13 +118,12 @@ export default function PermisosPage() {
   );
 
   const selectModule = (module: string) => {
-    setLoading(true);
+    if (module === selectedModule && page === 1) return;
     setSelectedModule(module);
     setPage(1);
   };
 
   const goToPage = useCallback((nextPage: number) => {
-    setLoading(true);
     setPage(nextPage);
   }, []);
 
@@ -134,8 +138,8 @@ export default function PermisosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-<main className="space-y-4 p-3 sm:p-4 lg:p-6">
+    <div className="min-h-full bg-background">
+<div className="space-y-4 p-3 sm:p-4 lg:p-6">
         <PageHeader
           title="Permisos"
           subtitle="Catálogo de capacidades disponibles para configurar los roles."
@@ -149,7 +153,13 @@ export default function PermisosPage() {
           )}
         />
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Bones
+          name="permisos-kpis"
+          loading={loading || catalog === null}
+          onRetry={reload}
+          placeholder={<BoneKpis count={4} />}
+        >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 stagger-children">
           <StatCard
             label="PERMISOS"
             value={String(allPermissions.length || total)}
@@ -179,6 +189,7 @@ export default function PermisosPage() {
             valueColor="text-emerald-500"
           />
         </div>
+        </Bones>
 
         {error && (
           <p
@@ -198,21 +209,29 @@ export default function PermisosPage() {
                 placeholder="Filtrar esta página por permiso o descripción..."
                 className="w-full lg:max-w-sm"
               />
-              <div className="flex gap-1.5 overflow-x-auto pb-1 lg:ml-auto lg:pb-0">
-                <FilterButton
-                  active={selectedModule === 'todos'}
-                  label="Todos"
-                  onClick={() => selectModule('todos')}
-                />
-                {modules.map((module) => (
+              {catalog === null ? (
+                <div className="flex gap-1.5 overflow-hidden pb-1 lg:ml-auto lg:pb-0" aria-hidden="true">
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <Bone key={index} className="h-7 w-20 shrink-0 rounded-lg" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 lg:ml-auto lg:pb-0">
                   <FilterButton
-                    key={module}
-                    active={selectedModule === module}
-                    label={moduleLabel(module)}
-                    onClick={() => selectModule(module)}
+                    active={selectedModule === 'todos'}
+                    label="Todos"
+                    onClick={() => selectModule('todos')}
                   />
-                ))}
-              </div>
+                  {modules.map((module) => (
+                    <FilterButton
+                      key={module}
+                      active={selectedModule === module}
+                      label={moduleLabel(module)}
+                      onClick={() => selectModule(module)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -231,6 +250,7 @@ export default function PermisosPage() {
           <Bones
             name="permisos-tabla"
             loading={loading}
+            onRetry={reload}
             placeholder={<BoneTable rows={8} cols={4} />}
           >
             {filteredPermissions.length === 0 ? (
@@ -308,7 +328,7 @@ export default function PermisosPage() {
             />
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
