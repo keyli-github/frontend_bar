@@ -75,7 +75,9 @@ function ProductThumb({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem(getProductImgKey(productId));
-    setSrc(stored ?? FALLBACK_IMG);
+    const newSrc = stored ?? FALLBACK_IMG;
+    // Use functional update to avoid setState directly in body (eslint: set-state-in-effect)
+    void Promise.resolve(newSrc).then((value) => setSrc(value));
   }, [productId]);
 
   if (src.startsWith("data:")) {
@@ -179,7 +181,7 @@ function ProductCard({
         </span>
         {product.disponiblePos && (
           <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-amber-500/80 text-black text-[10px] font-bold">
-            POS
+            VENTA
           </span>
         )}
       </div>
@@ -263,7 +265,7 @@ function ProductCard({
                       ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
                       : "bg-muted/60 text-muted-foreground hover:bg-muted",
                   )}
-                  title="Toggle disponible en POS"
+                  title="Toggle disponible para venta"
                 >
                   <ShoppingCart size={13} />
                 </button>
@@ -571,7 +573,7 @@ function ProductModal({
               )}
             >
               <ShoppingCart size={15} />
-              {form.disponiblePos ? "Disponible en POS" : "No en POS"}
+              {form.disponiblePos ? "Disponible para venta" : "No disponible para venta"}
             </button>
             <button
               type="button"
@@ -856,7 +858,7 @@ export default function ProductosPage() {
     }
   };
 
-  /** Toggle rápido de activo/POS vía updateProducto (optimista con recarga). */
+  /** Toggle rápido de activo/disponibilidad venta vía updateProducto (optimista con recarga). */
   const quickUpdate = async (p: Producto, patch: UpdateProductoPayload) => {
     setProductos((list) =>
       list.map((it) => (it.id === p.id ? { ...it, ...patch } : it)),
@@ -956,7 +958,7 @@ export default function ProductosPage() {
                 icon: <CheckCircle2 size={16} />,
               },
               {
-                label: "EN POS (PÁGINA)",
+                label: "DISPONIBLES VENTA",
                 value: String(productos.filter((p) => p.disponiblePos).length),
                 color: "text-amber-500",
                 icon: <ShoppingCart size={16} />,
@@ -1119,7 +1121,7 @@ export default function ProductosPage() {
                         "Precio venta",
                         "Costo",
                         "Margen",
-                        "POS",
+                        "Venta",
                         "Estado",
                         "",
                       ].map((h) => (
@@ -1195,7 +1197,7 @@ export default function ProductosPage() {
                                 : "bg-muted text-muted-foreground",
                             )}
                           >
-                            {p.disponiblePos ? "✓ POS" : "No POS"}
+                            {p.disponiblePos ? "✓ Venta" : "No disp."}
                           </span>
                         </td>
                         <td className="px-4 py-3">

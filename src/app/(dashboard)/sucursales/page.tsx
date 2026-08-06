@@ -4,9 +4,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   Building2,
   Calendar,
   Eye,
+  Hash,
   MapPin,
   Pencil,
   Phone,
@@ -235,6 +237,18 @@ export default function SucursalesPage() {
                           <Users size={13} className="shrink-0 text-primary-text" />
                           <span>{sede._count.usuarios} usuario{sede._count.usuarios === 1 ? '' : 's'}</span>
                         </div>
+                        {/* Código de sede para ventas */}
+                        <div className="sm:col-span-3 flex items-center gap-2">
+                          <Hash size={13} className={sede.codigoSede ? 'text-amber-500' : 'text-destructive'} />
+                          {sede.codigoSede ? (
+                            <span className="font-mono font-bold text-amber-500">{sede.codigoSede}</span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-destructive">
+                              <AlertTriangle size={11} />
+                              Sin código de sede — <strong>no se podrán registrar ventas</strong>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -321,6 +335,19 @@ export default function SucursalesPage() {
                     <dd className="mt-1 break-words text-sm font-medium text-foreground">{value}</dd>
                   </div>
                 ))}
+                {/* Código de sede — campo crítico para ventas */}
+                <div className={`rounded-lg border p-3 ${detail.codigoSede ? 'border-amber-500/25 bg-amber-500/[0.04]' : 'border-destructive/25 bg-destructive/5'}`}>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Código de sede (ventas)</dt>
+                  <dd className="mt-1 text-sm font-medium">
+                    {detail.codigoSede ? (
+                      <span className="font-mono font-bold text-amber-500">{detail.codigoSede}</span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-destructive">
+                        <AlertTriangle size={13} /> Sin código — las ventas no pueden generarse
+                      </span>
+                    )}
+                  </dd>
+                </div>
               </dl>
             </div>
           )}
@@ -359,6 +386,7 @@ function SedeFormModal({
 }) {
   const isCreate = !sede;
   const [nombre, setNombre] = useState(sede?.nombre ?? '');
+  const [codigoSede, setCodigoSede] = useState(sede?.codigoSede ?? '');
   const [direccion, setDireccion] = useState(sede?.direccion ?? '');
   const [telefono, setTelefono] = useState(sede?.telefono ?? '');
   const [ruc, setRuc] = useState(sede?.ruc ?? '');
@@ -366,11 +394,17 @@ function SedeFormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rucIsValid = ruc === '' || /^\d{11}$/.test(ruc);
+  const codigoSedeIsValid = codigoSede === '' || /^[A-Z0-9]{2,5}$/.test(codigoSede);
   const blocksDeactivation = Boolean(sede && sede._count.usuarios > 0 && sede.activo);
+
+  const handleCodigoChange = (value: string) => {
+    setCodigoSede(value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5));
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!rucIsValid) return;
+    if (!codigoSedeIsValid) return;
     if (blocksDeactivation && !activo) {
       setError('No se puede desactivar una sede con usuarios asignados.');
       return;
@@ -380,6 +414,7 @@ function SedeFormModal({
     setError(null);
     const payload = {
       nombre: nombre.trim(),
+      codigoSede: codigoSede.trim() || undefined,
       direccion: direccion.trim(),
       telefono: telefono.trim(),
       ruc: ruc.trim(),
@@ -414,13 +449,40 @@ function SedeFormModal({
             <label htmlFor="sede-nombre" className={labelClass}>Nombre</label>
             <input id="sede-nombre" value={nombre} onChange={(event) => setNombre(event.target.value)} maxLength={100} required className={inputClass} />
           </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="sede-direccion" className={labelClass}>Dirección</label>
-            <input id="sede-direccion" value={direccion} onChange={(event) => setDireccion(event.target.value)} maxLength={200} className={inputClass} />
+          <div>
+            <label htmlFor="sede-codigo" className={labelClass}>
+              Código de sede *
+              <span className="ml-1 text-[9px] font-normal normal-case tracking-normal text-muted-foreground/70">
+                (2-5 letras mayúsculas o números — requerido para ventas)
+              </span>
+            </label>
+            <input
+              id="sede-codigo"
+              value={codigoSede}
+              onChange={(e) => handleCodigoChange(e.target.value)}
+              maxLength={5}
+              placeholder="EJ: CEN"
+              className={`${inputClass} font-mono uppercase`}
+            />
+            {!codigoSedeIsValid && codigoSede && (
+              <p className="mt-1.5 text-[11px] text-destructive">
+                Debe tener 2–5 caracteres: letras mayúsculas (A-Z) y números (0-9) únicamente.
+              </p>
+            )}
+            {!codigoSede && (
+              <p className="mt-1.5 text-[11px] text-amber-500 flex items-center gap-1">
+                <AlertTriangle size={11} />
+                Sin código: las vendedoras no podrán registrar ventas en esta sede.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="sede-telefono" className={labelClass}>Teléfono</label>
             <input id="sede-telefono" type="tel" value={telefono} onChange={(event) => setTelefono(event.target.value)} maxLength={20} className={inputClass} />
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="sede-direccion" className={labelClass}>Dirección</label>
+            <input id="sede-direccion" value={direccion} onChange={(event) => setDireccion(event.target.value)} maxLength={200} className={inputClass} />
           </div>
           <div>
             <label htmlFor="sede-ruc" className={labelClass}>RUC</label>
@@ -443,7 +505,7 @@ function SedeFormModal({
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} disabled={saving} className="h-10 rounded-lg border border-border bg-muted/60 px-4 text-sm text-foreground hover:bg-muted disabled:opacity-50">Cancelar</button>
-          <button type="submit" disabled={saving || !rucIsValid} className="h-10 rounded-lg bg-primary px-5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          <button type="submit" disabled={saving || !rucIsValid || !codigoSedeIsValid} className="h-10 rounded-lg bg-primary px-5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
             {saving ? 'GUARDANDO…' : isCreate ? 'CREAR SEDE' : 'GUARDAR CAMBIOS'}
           </button>
         </div>
