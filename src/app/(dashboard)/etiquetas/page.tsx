@@ -14,7 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Bones } from "@/components/shared/bones";
+import { Bones, Bone } from "@/components/shared/bones";
 import { ApiError, etiquetasApi } from "@/lib/api";
 import { hasPermission } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -127,16 +127,16 @@ export default function EtiquetasPage() {
   };
 
   return (
-    <div className="min-h-full bg-background p-4 sm:p-5">
-      <div className="mx-auto max-w-3xl space-y-4">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-xl font-bold text-foreground">
-              <Wallet size={20} className="text-amber-500" />
+    <div className="flex min-h-full flex-col bg-background">
+      <div className="flex-1 space-y-4 p-4 sm:p-6">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex-1">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+              <Wallet size={22} className="text-amber-500" />
               Billeteras Digitales
             </h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Etiquetas de métodos de pago: Yape, Plin, Agora y otras billeteras autorizadas.
+            <p className="mt-1 text-sm text-muted-foreground">
+              Gestiona los métodos de pago digitales: Yape, Plin, Agora y otras billeteras autorizadas.
             </p>
           </div>
           <div className="flex gap-2">
@@ -144,33 +144,33 @@ export default function EtiquetasPage() {
               type="button"
               onClick={() => void loadEtiquetas()}
               disabled={loading}
-              className="grid size-9 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-amber-500 disabled:opacity-50"
+              className="grid size-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:text-amber-500 disabled:opacity-50"
               aria-label="Actualizar"
             >
-              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
             {canCreate && (
               <button
                 type="button"
                 onClick={openCreate}
-                className="flex h-9 items-center gap-1.5 rounded-lg bg-amber-500 px-4 text-xs font-bold text-black hover:bg-amber-400"
+                className="flex h-10 items-center gap-2 rounded-lg bg-amber-500 px-5 text-sm font-semibold text-black transition-colors hover:bg-amber-400"
               >
-                <Plus size={14} /> Nueva billetera
+                <Plus size={16} /> Nueva billetera
               </button>
             )}
           </div>
         </header>
 
         {error && (
-          <p role="alert" className="rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </p>
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <p className="text-sm font-medium text-destructive">{error}</p>
+          </div>
         )}
 
         {/* Aviso de negocio */}
-        <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.05] px-4 py-3 text-xs text-muted-foreground">
-          <p className="font-semibold text-blue-400">Solo billeteras digitales</p>
-          <p className="mt-0.5">
+        <div className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-4">
+          <p className="text-sm font-semibold text-blue-400">💡 Solo billeteras digitales</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             Las etiquetas representan únicamente billeteras digitales (Yape, Plin, Agora, etc.).
             No deben representar tarjetas, retiros, depósitos ni gastos genéricos.
           </p>
@@ -181,83 +181,124 @@ export default function EtiquetasPage() {
           loading={loading}
           onRetry={() => void loadEtiquetas()}
           placeholder={
-            <div className="space-y-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-xl border border-border bg-muted/30" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Bone className="size-11 shrink-0" />
+                      <div className="space-y-2">
+                        <Bone className="h-5 w-24" />
+                        <Bone className="h-3 w-16" />
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Bone className="size-9" />
+                      <Bone className="size-9" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 border-t border-border pt-2" style={{ opacity: 0.5 }}>
+                    <Bone className="h-6 w-32" />
+                    <Bone className="h-6 w-20" />
+                  </div>
+                </div>
               ))}
             </div>
           }
         >
           {etiquetas.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              No hay billeteras configuradas.
+            <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/10">
+              <div className="text-center">
+                <Wallet size={40} className="mx-auto text-muted-foreground/40" />
+                <p className="mt-3 text-sm font-medium text-muted-foreground">
+                  No hay billeteras configuradas
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  Crea tu primera billetera para comenzar
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               {etiquetas
                 .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
                 .map((etiqueta) => (
                   <div
                     key={etiqueta.id}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl border bg-card px-4 py-3 transition-opacity",
+                      "flex flex-col gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-md",
                       !etiqueta.activo && "opacity-50",
                     )}
                   >
-                    <div className={cn(
-                      "grid size-9 shrink-0 place-items-center rounded-lg border",
-                      etiqueta.activo
-                        ? "border-amber-500/25 bg-amber-500/10 text-amber-500"
-                        : "border-border bg-muted text-muted-foreground",
-                    )}>
-                      <Wallet size={16} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-foreground">{etiqueta.nombre}</span>
-                        {!etiqueta.activo && (
-                          <span className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
-                            INACTIVA
-                          </span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "grid size-11 shrink-0 place-items-center rounded-lg border",
+                          etiqueta.activo
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                            : "border-border bg-muted text-muted-foreground",
+                        )}>
+                          <Wallet size={18} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground">{etiqueta.nombre}</span>
+                            {!etiqueta.activo && (
+                              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                                INACTIVA
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">Orden: {etiqueta.orden}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(etiqueta)}
+                            className="grid size-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-amber-500/50 hover:bg-amber-500/5 hover:text-amber-500"
+                            aria-label="Editar"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {canDesactivar && (
+                          <button
+                            type="button"
+                            onClick={() => void handleToggle(etiqueta)}
+                            className={cn(
+                              "grid size-9 place-items-center rounded-lg border transition-colors",
+                              etiqueta.activo
+                                ? "border-border text-muted-foreground hover:border-amber-500/50 hover:bg-amber-500/5 hover:text-amber-500"
+                                : "border-emerald-500/30 text-emerald-500 hover:border-emerald-500/50 hover:bg-emerald-500/5",
+                            )}
+                            aria-label={etiqueta.activo ? "Desactivar" : "Activar"}
+                          >
+                            {etiqueta.activo ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                          </button>
                         )}
                       </div>
-                      <div className="mt-0.5 flex gap-3 text-[11px] text-muted-foreground">
-                        <span>Orden: {etiqueta.orden}</span>
-                        <span className="flex items-center gap-1">
-                          {etiqueta.requiereComprobante
-                            ? <><CheckCircle2 size={11} className="text-emerald-500" /> Requiere comprobante</>
-                            : <><XCircle size={11} /> Sin comprobante</>}
-                        </span>
-                        {etiqueta.sedeId
-                          ? <span className="text-amber-500/70">Sede específica</span>
-                          : <span>Global</span>}
-                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(etiqueta)}
-                          className="grid size-8 place-items-center rounded-lg border border-border text-muted-foreground hover:border-amber-500/40 hover:text-amber-500"
-                          aria-label="Editar"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                      )}
-                      {canDesactivar && (
-                        <button
-                          type="button"
-                          onClick={() => void handleToggle(etiqueta)}
-                          className={cn(
-                            "grid size-8 place-items-center rounded-lg border transition-colors",
-                            etiqueta.activo
-                              ? "border-border text-muted-foreground hover:border-red-500/40 hover:text-red-500"
-                              : "border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10",
-                          )}
-                          aria-label={etiqueta.activo ? "Desactivar" : "Activar"}
-                        >
-                          {etiqueta.activo ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
-                        </button>
+                    <div className="flex flex-wrap gap-2 border-t border-muted pt-2">
+                      <span className={cn(
+                        "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
+                        etiqueta.requiereComprobante
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-muted text-muted-foreground",
+                      )}>
+                        {etiqueta.requiereComprobante
+                          ? <><CheckCircle2 size={12} /> Requiere comprobante</>
+                          : <><XCircle size={12} /> Sin comprobante</>}
+                      </span>
+                      {etiqueta.sedeId ? (
+                        <span className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                          Sede específica
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                          Global
+                        </span>
                       )}
                     </div>
                   </div>
@@ -265,11 +306,12 @@ export default function EtiquetasPage() {
             </div>
           )}
         </Bones>
+      </div>
 
-        {/* Modal crear/editar */}
-        {showModal && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
-            <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl">
+      {/* Modal crear/editar */}
+      {showModal && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm animate-scale-in rounded-2xl border border-border bg-card p-5 shadow-2xl">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-bold text-foreground">
                   {editingId ? "Editar billetera" : "Nueva billetera"}
@@ -340,7 +382,6 @@ export default function EtiquetasPage() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
