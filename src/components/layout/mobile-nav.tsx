@@ -2,11 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu } from 'lucide-react';
 import { MOBILE_NAV } from '@/lib/navigation';
 import { canAccess } from '@/lib/roles';
 import { useAuthStore } from '@/store/auth-store';
-import { useUIStore } from '@/store/ui-store';
 import { cn } from '@/lib/utils';
 
 /**
@@ -19,7 +17,6 @@ import { cn } from '@/lib/utils';
 export function MobileNav() {
   const pathname = usePathname();
   const permisos = useAuthStore((s) => s.permisos);
-  const openSidebar = useUIStore((s) => s.toggleSidebar);
 
   const items = MOBILE_NAV.filter((item) => canAccess(permisos, item.href));
   if (items.length === 0) return null;
@@ -46,16 +43,6 @@ export function MobileNav() {
           </Link>
         );
       })}
-
-      <button
-        type="button"
-        onClick={openSidebar}
-        aria-label="Abrir menú completo"
-        className="flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 px-1 pt-2 text-[10px] font-medium text-muted-foreground transition-colors"
-      >
-        <Menu size={20} aria-hidden="true" />
-        <span>Más</span>
-      </button>
     </nav>
   );
 }

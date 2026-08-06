@@ -307,7 +307,10 @@ export default function KardexPage() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {movimientos.map((k) => {
-                      const badge = tipoBadge[k.tipo];
+                      const badge = tipoBadge[k.tipo] || {
+                        bg: "bg-gray-500/10 border-gray-500/30 text-gray-400",
+                        icon: <History size={10} />,
+                      };
                       return (
                         <tr
                           key={k.id}
