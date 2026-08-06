@@ -49,8 +49,8 @@ function AccordionContent({
 }
 
 const itemBase =
-  "flex items-center gap-2.5 rounded-lg px-3 min-h-control-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const itemActive = "bg-primary/12 text-primary-text";
+  "flex items-center gap-2.5 rounded-lg px-3 min-h-control-lg text-sm font-medium transition-colors";
+const itemActive = "bg-primary text-black font-semibold";
 const itemIdle =
   "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground";
 

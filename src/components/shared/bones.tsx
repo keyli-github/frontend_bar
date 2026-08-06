@@ -75,14 +75,24 @@ function useLoadPhase(loading: boolean): Phase {
 // ─── Bone ─────────────────────────────────────────────────────────────────────
 
 /**
- * Bloque de placeholder con animación de pulso suave — igual que Frank.
+ * Bloque de placeholder con animación shimmer elegante.
  */
 export function Bone({ className }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className={cn('animate-pulse rounded-md bg-muted', className)}
-    />
+      className={cn(
+        'relative overflow-hidden rounded-lg bg-gradient-to-r from-muted/20 via-muted/40 to-muted/20',
+        className
+      )}
+    >
+      <div 
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+        style={{
+          animation: 'shimmer 2s ease-in-out infinite',
+        }}
+      />
+    </div>
   );
 }
 
