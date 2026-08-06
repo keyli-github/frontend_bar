@@ -21,3 +21,5 @@ export * as inventarioApi from './inventario.api';
 export * as kardexApi from './kardex.api';
 export * as comprasApi from './compras.api';
 export * as cajaApi from './caja.api';
+export * as ventasApi from './ventas.api';
+export * as etiquetasApi from './etiquetas.api';

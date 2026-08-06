@@ -9,6 +9,7 @@ import type {
   CajaMovimientosQuery,
   CajaSesion,
   CajaSesionHistorial,
+  CierreV2Payload,
   MovimientoCajaPayload,
 } from "@/types/caja";
 
@@ -67,6 +68,10 @@ export async function listMovimientosCaja(
   return data;
 }
 
+/**
+ * @deprecated Bloqueado por regla de negocio en sesiones V2 (422).
+ * Solo funciona para sesiones V1 legacy (si el usuario tiene caja:movimientos).
+ */
 export async function registrarMovimientoCaja(
   cajaId: string,
   payload: MovimientoCajaPayload,
@@ -89,9 +94,14 @@ export async function precuadrarCaja(
   return data;
 }
 
+/**
+ * Cierre de caja V2.
+ * Si hay ventas PENDIENTES sin clasificar, el backend bloquea el cierre
+ * a menos que se envíe `forzarPendientes: true` + `motivoForzado`.
+ */
 export async function cerrarCaja(
   cajaId: string,
-  payload: ArqueoCajaPayload,
+  payload: CierreV2Payload,
 ): Promise<CajaSesion> {
   const { data } = await api.post<CajaSesion>(
     `/caja/${cajaId}/cierre`,

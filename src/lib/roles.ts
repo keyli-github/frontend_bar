@@ -17,9 +17,7 @@ export const USER_ROLES = [
   "SUPERADMIN",
   "ADMIN",
   "CAJERO",
-  "MOZO",
-  "COCINA",
-  "BARTENDER",
+  "VENDEDORA",
 ] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
@@ -32,12 +30,10 @@ export const roleLabel: Record<UserRole, string> = {
   SUPERADMIN: "Super Admin",
   ADMIN: "Administrador",
   CAJERO: "Cajero",
-  MOZO: "Mozo",
-  COCINA: "Cocina",
-  BARTENDER: "Bartender",
+  VENDEDORA: "Vendedora",
 };
 
-/** Etiqueta legible para roles base y roles personalizados. */
+/** Etiqueta legible para roles activos y roles personalizados. */
 export const getRoleLabel = (role: string): string =>
   isUserRole(role) ? roleLabel[role] : role;
 
@@ -45,9 +41,7 @@ export const roleBadgeClass: Record<UserRole, string> = {
   SUPERADMIN: "bg-special/10 border-special/25 text-special",
   ADMIN: "bg-primary/10 border-primary/25 text-primary-text",
   CAJERO: "bg-success/10 border-success/25 text-success",
-  MOZO: "bg-success/10 border-success/25 text-success",
-  COCINA: "bg-warning/10 border-warning/25 text-warning",
-  BARTENDER: "bg-warning/10 border-warning/25 text-warning",
+  VENDEDORA: "bg-amber-500/10 border-amber-500/25 text-amber-500",
 };
 
 /** Color del avatar por rol, usado en tablas y cabeceras. */
@@ -55,9 +49,7 @@ export const roleAvatarClass: Record<UserRole, string> = {
   SUPERADMIN: "bg-special",
   ADMIN: "bg-primary",
   CAJERO: "bg-success",
-  MOZO: "bg-success",
-  COCINA: "bg-warning",
-  BARTENDER: "bg-warning",
+  VENDEDORA: "bg-amber-500",
 };
 
 // ============================================================
@@ -103,6 +95,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
   "/perfil": null,
   "/seguridad": null,
   "/caja": "caja:leer",
+  "/ventas": "ventas:crear",          // VENDEDORA: crear ventas
+  "/ventas/historial": "ventas:leer", // CAJERO/ADMIN: ver historial + conciliar
+  "/etiquetas": "etiquetas:crear",    // ADMIN/SUPERADMIN: gestionar billeteras
   "/categorias": "categorias:leer",
   "/productos": "productos:leer",
   "/inventario": "inventario:leer",

@@ -35,7 +35,7 @@ export interface ChangePasswordPayload {
 export interface Perfil {
   id: string;
   username: string;
-  /** Nombre del rol: SUPERADMIN, ADMIN, CAJERO, MOZO, COCINA, BARTENDER. */
+  /** Nombre del rol activo: SUPERADMIN, ADMIN, CAJERO, VENDEDORA. */
   rol: string;
   /** Jerarquia: SUPERADMIN=100, ADMIN=50, empleados=10. */
   nivel: number;
@@ -209,6 +209,12 @@ export type PermisosAgrupados = Record<string, Permiso[]>;
 export interface Establecimiento {
   id: string;
   nombre: string;
+  /**
+   * Código corto de 2–5 caracteres en MAYÚSCULA (A-Z, 0-9).
+   * Requerido para generar códigos de venta (V-{codigoSede}-{YYYY}-{NNNN}).
+   * null si aún no ha sido configurado.
+   */
+  codigoSede: string | null;
   direccion: string | null;
   telefono: string | null;
   /** RUC peruano: 11 digitos. */
@@ -221,6 +227,8 @@ export interface Establecimiento {
 
 export interface CreateEstablecimientoPayload {
   nombre: string;
+  /** Código corto único (2-5 caracteres A-Z, 0-9). Requerido para módulo de ventas. */
+  codigoSede?: string;
   direccion?: string;
   telefono?: string;
   ruc?: string;
@@ -228,6 +236,11 @@ export interface CreateEstablecimientoPayload {
 
 export interface UpdateEstablecimientoPayload {
   nombre?: string;
+  /**
+   * Código corto estable. Advertencia: cambiarlo altera la serie de códigos de venta.
+   * Formato: 2-5 caracteres en MAYÚSCULA (A-Z, 0-9).
+   */
+  codigoSede?: string;
   direccion?: string;
   telefono?: string;
   ruc?: string;
@@ -376,6 +389,10 @@ export interface UpdateCategoriaPayload {
 /**
  * Item de `GET /productos` (ProductosService.toDto). `margin` es el margen
  * porcentual calculado en el servidor. Precios en decimales.
+ *
+ * El backend retorna `disponiblePos` por compatibilidad (columna física).
+ * En el código de UI usar siempre `disponiblePos` — es el nombre del campo
+ * en la respuesta JSON.
  */
 export interface Producto {
   id: string;
@@ -387,6 +404,10 @@ export interface Producto {
   unidad: string;
   precioVenta: number;
   precioCosto: number;
+  /**
+   * `true` si el producto está disponible para la venta.
+   * El backend lo expone como `disponiblePos` por compatibilidad.
+   */
   disponiblePos: boolean;
   activo: boolean;
   createdAt: string;
