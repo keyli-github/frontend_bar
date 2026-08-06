@@ -2,17 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Banknote,
   Calculator,
+  Clock,
   Eye,
   History,
   Landmark,
   LockKeyhole,
-  PlusCircle,
   RefreshCw,
   Scale,
+  ShoppingCart,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -30,17 +32,18 @@ import { useAuthStore } from "@/store/auth-store";
 import type { Establecimiento } from "@/types/api";
 import {
   CAJA_DENOMINACIONES,
+  getSaldoEsperado,
   type CajaDetalle,
   type CajaEstado,
-  type CajaMedioPago,
   type CajaMovimiento,
   type CajaMovimientoTipo,
+  type CajaResumenV2,
   type CajaSesion,
   type CajaSesionHistorial,
+  type CierreV2Payload,
 } from "@/types/caja";
 
 type ArqueoMode = "precuadre" | "cierre";
-type MovimientoMode = "entrada" | "salida";
 type CajaTab = "actual" | "historial";
 const HISTORY_PAGE_SIZE = 10;
 const DETAIL_MOVEMENTS_PAGE_SIZE = 10;
@@ -67,9 +70,9 @@ export default function CajaPage() {
   const user = useAuthStore((state) => state.user);
   const permisos = useAuthStore((state) => state.permisos);
   const canOpen = hasPermission(permisos, "caja:aperturar");
-  const canMove = hasPermission(permisos, "caja:movimientos");
   const canPreclose = hasPermission(permisos, "caja:precuadre");
   const canClose = hasPermission(permisos, "caja:cerrar");
+  const canForzarCierre = hasPermission(permisos, "caja:forzar-cierre");
   const isSuperadmin = user?.rol === "SUPERADMIN";
 
   const [sedes, setSedes] = useState<Establecimiento[]>([]);
@@ -110,18 +113,11 @@ export default function CajaPage() {
   const [denominationCounts, setDenominationCounts] = useState(
     emptyDenominationCounts,
   );
-  const [showMovimiento, setShowMovimiento] = useState(false);
-  const [movimientoMode, setMovimientoMode] =
-    useState<MovimientoMode>("entrada");
-  const [concepto, setConcepto] = useState("");
-  const [montoMovimiento, setMontoMovimiento] = useState("");
-  const [medioPago, setMedioPago] = useState<CajaMedioPago>("EFECTIVO");
-  const [referencia, setReferencia] = useState("");
-  const [comprobante, setComprobante] = useState("");
-  const [movError, setMovError] = useState<string | null>(null);
   const [arqueoMode, setArqueoMode] = useState<ArqueoMode | null>(null);
   const [montoDeclarado, setMontoDeclarado] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [forzarPendientes, setForzarPendientes] = useState(false);
+  const [motivoForzado, setMotivoForzado] = useState("");
   const [arqueoError, setArqueoError] = useState<string | null>(null);
   const loadRequestId = useRef(0);
   const historyRequestId = useRef(0);
@@ -401,79 +397,15 @@ export default function CajaPage() {
     }
   };
 
-  const openMovimiento = (mode: MovimientoMode) => {
-    setMovimientoMode(mode);
-    setShowMovimiento(true);
-    setConcepto("");
-    setMontoMovimiento("");
-    setMedioPago("EFECTIVO");
-    setReferencia("");
-    setComprobante("");
-    setMovError(null);
-  };
-
-  const registrarMovimiento = async () => {
-    if (!caja) return;
-    const monto = Number(montoMovimiento);
-    if (!concepto.trim() || !Number.isFinite(monto) || monto <= 0) {
-      setMovError("Completa el concepto y un monto mayor a cero.");
-      return;
-    }
-    const selectedMethod =
-      movimientoMode === "entrada" ? "EFECTIVO" : medioPago;
-    const digital =
-      selectedMethod === "YAPE" || selectedMethod === "TRANSFERENCIA";
-    if (digital && !comprobante.trim()) {
-      setMovError("Yape y transferencia requieren voucher o comprobante.");
-      return;
-    }
-    const tipo: CajaMovimientoTipo =
-      movimientoMode === "entrada" ? "ENTRADA" : "SALIDA";
-    setSaving(true);
-    try {
-      await cajaApi.registrarMovimientoCaja(caja.id, {
-        tipo,
-        origen:
-          movimientoMode === "entrada"
-            ? "MANUAL"
-            : digital
-              ? "PAGO_NO_EFECTIVO"
-              : "MANUAL",
-        medioPago: selectedMethod,
-        concepto: concepto.trim(),
-        monto,
-        referencia: referencia.trim() || undefined,
-        comprobante: comprobante.trim() || undefined,
-      });
-      toast.success(
-        movimientoMode === "entrada"
-          ? "Entrada registrada"
-          : "Salida registrada",
-      );
-      setShowMovimiento(false);
-      setConcepto("");
-      setMontoMovimiento("");
-      setMedioPago("EFECTIVO");
-      setReferencia("");
-      setComprobante("");
-      await loadCaja();
-    } catch (reason) {
-      setMovError(
-        errorMessage(
-          reason,
-          `No se pudo registrar la ${movimientoMode}.`,
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const confirmarArqueo = async () => {
     if (!caja || !arqueoMode) return;
     const monto = Number(montoDeclarado);
     if (!Number.isFinite(monto) || monto < 0) {
       setArqueoError("Ingresa el efectivo contado en caja.");
+      return;
+    }
+    if (arqueoMode === "cierre" && forzarPendientes && !motivoForzado.trim()) {
+      setArqueoError("Debes indicar el motivo para cerrar con ventas pendientes.");
       return;
     }
     setSaving(true);
@@ -482,18 +414,29 @@ export default function CajaPage() {
         await cajaApi.precuadrarCaja(caja.id, { montoDeclarado: monto });
         toast.success("Precuadre guardado");
       } else {
-        await cajaApi.cerrarCaja(caja.id, {
+        const payload: CierreV2Payload = {
           montoDeclarado: monto,
           observaciones: observaciones.trim() || undefined,
-        });
+          forzarPendientes: forzarPendientes || undefined,
+          motivoForzado: forzarPendientes ? motivoForzado.trim() : undefined,
+        };
+        await cajaApi.cerrarCaja(caja.id, payload);
         toast.success("Caja cerrada correctamente");
       }
       setArqueoMode(null);
       setMontoDeclarado("");
       setObservaciones("");
+      setForzarPendientes(false);
+      setMotivoForzado("");
       await loadCaja();
     } catch (reason) {
-      setArqueoError(errorMessage(reason, "No se pudo completar el arqueo."));
+      const msg = errorMessage(reason, "No se pudo completar el arqueo.");
+      // Si hay ventas pendientes, ofrecer cierre forzado
+      if (reason instanceof ApiError && (reason.message?.includes("VENTAS_PENDIENTES") || reason.message?.includes("pendientes"))) {
+        setArqueoError(msg + " Activa 'Forzar cierre' para continuar.");
+      } else {
+        setArqueoError(msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -735,28 +678,10 @@ export default function CajaPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {canMove && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => openMovimiento("entrada")}
-                      className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-500/25 px-3 text-xs font-semibold text-emerald-500 transition-colors hover:bg-emerald-500/10"
-                    >
-                      <ArrowUp size={14} /> Entrada
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openMovimiento("salida")}
-                      className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
-                    >
-                      <PlusCircle size={14} /> Salida
-                    </button>
-                  </>
-                )}
                 {canPreclose && (
                   <button
                     type="button"
-                    onClick={() => { setArqueoError(null); setArqueoMode("precuadre"); }}
+                    onClick={() => { setArqueoError(null); setForzarPendientes(false); setMotivoForzado(""); setArqueoMode("precuadre"); }}
                     className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/25 px-3 text-xs font-semibold text-amber-500 transition-colors hover:bg-amber-500/10"
                   >
                     <Calculator size={14} /> Precuadre
@@ -765,7 +690,7 @@ export default function CajaPage() {
                 {canClose && (
                   <button
                     type="button"
-                    onClick={() => { setArqueoError(null); setArqueoMode("cierre"); }}
+                    onClick={() => { setArqueoError(null); setForzarPendientes(false); setMotivoForzado(""); setArqueoMode("cierre"); }}
                     className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/25 px-3 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10"
                   >
                     <LockKeyhole size={14} /> Cerrar
@@ -780,25 +705,74 @@ export default function CajaPage() {
                 value={formatCurrency(caja.montoApertura)}
                 icon={<Banknote size={14} />}
               />
-              <StatCard
-                label="Entradas"
-                value={formatCurrency(caja.resumen.totalEntradas)}
-                icon={<TrendingUp size={14} />}
-                valueColor="text-emerald-500"
-              />
-              <StatCard
-                label="Salidas"
-                value={formatCurrency(caja.resumen.totalSalidas)}
-                icon={<TrendingDown size={14} />}
-                valueColor="text-red-500"
-              />
-              <StatCard
-                label="Saldo esperado"
-                value={formatCurrency(caja.resumen.saldoEsperado)}
-                icon={<Scale size={14} />}
-                valueColor="text-amber-500"
-              />
+              {caja.resumen.version === "V2" ? (
+                <>
+                  <StatCard
+                    label="Ventas neto"
+                    value={formatCurrency(caja.resumen.totalVentasNeto)}
+                    icon={<TrendingUp size={14} />}
+                    valueColor="text-emerald-500"
+                  />
+                  <StatCard
+                    label="Digital neto"
+                    value={formatCurrency(caja.resumen.totalDigitalNeto)}
+                    icon={<TrendingDown size={14} />}
+                    valueColor="text-blue-500"
+                  />
+                  <StatCard
+                    label="Efectivo esperado"
+                    value={formatCurrency(caja.resumen.efectivoEsperado)}
+                    icon={<Scale size={14} />}
+                    valueColor="text-amber-500"
+                  />
+                </>
+              ) : (
+                <>
+                  <StatCard
+                    label="Entradas"
+                    value={formatCurrency((caja.resumen as { totalEntradas: number }).totalEntradas)}
+                    icon={<TrendingUp size={14} />}
+                    valueColor="text-emerald-500"
+                  />
+                  <StatCard
+                    label="Salidas"
+                    value={formatCurrency((caja.resumen as { totalSalidas: number }).totalSalidas)}
+                    icon={<TrendingDown size={14} />}
+                    valueColor="text-red-500"
+                  />
+                  <StatCard
+                    label="Saldo esperado"
+                    value={formatCurrency(getSaldoEsperado(caja.resumen))}
+                    icon={<Scale size={14} />}
+                    valueColor="text-amber-500"
+                  />
+                </>
+              )}
             </section>
+
+            {/* Indicador de ventas pendientes V2 */}
+            {caja.resumen.version === "V2" && (caja.resumen as CajaResumenV2).ventasPendientes > 0 && (
+              <section className="flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
+                <Clock size={14} className="shrink-0 text-amber-500" />
+                <p className="text-muted-foreground">
+                  <span className="font-semibold text-amber-500">
+                    {(caja.resumen as CajaResumenV2).ventasPendientes} venta{(caja.resumen as CajaResumenV2).ventasPendientes !== 1 ? "s" : ""} sin clasificar.
+                  </span>{" "}
+                  El cajero debe clasificarlas como Efectivo o Billetera antes del cierre.
+                </p>
+                <a href="/ventas" className="ml-auto flex shrink-0 items-center gap-1 text-amber-500 hover:underline">
+                  <ShoppingCart size={12} /> Ver ventas
+                </a>
+              </section>
+            )}
+
+            {/* Indicador de sesión V1 (legacy) */}
+            {caja.resumen.version === "V1" && (
+              <section className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+                <AlertTriangle size={14} className="shrink-0" />
+                Sesión legacy (V1). Las ventas y la conciliación de pagos no están disponibles para esta sesión.
+              </section>
+            )}
 
             {caja.precuadreAt && (
               <section className="flex flex-col gap-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
@@ -1124,120 +1098,6 @@ export default function CajaPage() {
         </Bones>
       </ModalShell>
 
-      {showMovimiento && caja && (
-        <ModalShell
-          open
-          title={`REGISTRAR ${movimientoMode.toUpperCase()}`}
-          onClose={() => !saving && setShowMovimiento(false)}
-        >
-          <div className="space-y-3">
-            {movError && (
-              <p
-                role="alert"
-                className="rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-              >
-                {movError}
-              </p>
-            )}
-            <p className="rounded-xl border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
-              {movimientoMode === "entrada"
-                ? "Las entradas representan dinero físico que ingresó a la caja, por eso su método es únicamente EFECTIVO."
-                : "Las salidas por Yape o transferencia representan dinero que no quedó físicamente en caja y requieren voucher."}
-            </p>
-            <Field label="Concepto">
-              <input
-                value={concepto}
-                onChange={(event) => setConcepto(event.target.value)}
-                maxLength={160}
-                className={FIELD_CLASS}
-                placeholder={
-                  movimientoMode === "entrada"
-                    ? "Ej. aporte o ajuste manual"
-                    : "Ej. pago Yape de venta o compra de hielo"
-                }
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Monto (S/)">
-                <input
-                  type="number"
-                  min="0.01"
-                  max="999999999.99"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={montoMovimiento}
-                  onChange={(event) => setMontoMovimiento(event.target.value)}
-                  className={FIELD_CLASS}
-                  placeholder="0.00"
-                />
-              </Field>
-              <Field label="Método">
-                {movimientoMode === "entrada" ? (
-                  <div className={cn(FIELD_CLASS, "flex items-center font-semibold")}>
-                    EFECTIVO
-                  </div>
-                ) : (
-                  <select
-                    value={medioPago}
-                    onChange={(event) =>
-                      setMedioPago(event.target.value as CajaMedioPago)
-                    }
-                    className={FIELD_CLASS}
-                  >
-                    {(
-                      [
-                        "EFECTIVO",
-                        "YAPE",
-                        "TRANSFERENCIA",
-                        "TARJETA",
-                        "OTRO",
-                      ] as const
-                    ).map((method) => (
-                      <option key={method}>{method}</option>
-                    ))}
-                  </select>
-                )}
-              </Field>
-            </div>
-            <Field label="Referencia (opcional)">
-              <input
-                value={referencia}
-                onChange={(event) => setReferencia(event.target.value)}
-                maxLength={100}
-                className={FIELD_CLASS}
-              />
-            </Field>
-            {movimientoMode === "salida" &&
-              (medioPago === "YAPE" || medioPago === "TRANSFERENCIA") && (
-              <Field label="Voucher o comprobante">
-                <input
-                  value={comprobante}
-                  onChange={(event) => setComprobante(event.target.value)}
-                  maxLength={500}
-                  className={FIELD_CLASS}
-                  placeholder="URL, código o referencia de la captura"
-                />
-              </Field>
-              )}
-            <button
-              type="button"
-              onClick={() => void registrarMovimiento()}
-              disabled={saving}
-              className={cn(
-                "h-11 w-full rounded-xl font-bold disabled:opacity-50",
-                movimientoMode === "entrada"
-                  ? "bg-emerald-500 text-white hover:bg-emerald-400"
-                  : "bg-amber-500 text-black hover:bg-amber-400",
-              )}
-            >
-              {saving
-                ? "REGISTRANDO…"
-                : `REGISTRAR ${movimientoMode.toUpperCase()}`}
-            </button>
-          </div>
-        </ModalShell>
-      )}
-
       {arqueoMode && caja && (
         <ModalShell
           open
@@ -1255,9 +1115,9 @@ export default function CajaPage() {
             </p>
           )}
           <p className="mb-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-            Saldo esperado:{" "}
+            Efectivo esperado:{" "}
             <strong className="text-amber-500">
-              {formatCurrency(caja.resumen.saldoEsperado)}
+              {formatCurrency(getSaldoEsperado(caja.resumen))}
             </strong>
             . Ingresa el efectivo contado sin modificar el saldo calculado.
           </p>
@@ -1279,24 +1139,50 @@ export default function CajaPage() {
               <div
                 className={cn(
                   'flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold',
-                  Number(montoDeclarado) - caja.resumen.saldoEsperado >= 0
+                  Number(montoDeclarado) - getSaldoEsperado(caja.resumen) >= 0
                     ? 'bg-emerald-500/10 text-emerald-500'
                     : 'bg-red-500/10 text-red-500',
                 )}
               >
                 <span>Diferencia</span>
-                <span>{formatCurrency(Number(montoDeclarado) - caja.resumen.saldoEsperado)}</span>
+                <span>{formatCurrency(Number(montoDeclarado) - getSaldoEsperado(caja.resumen))}</span>
               </div>
             )}
             {arqueoMode === "cierre" && (
-              <Field label="Observaciones (opcional)">
-                <textarea
-                  value={observaciones}
-                  onChange={(event) => setObservaciones(event.target.value)}
-                  maxLength={500}
-                  className={cn(FIELD_CLASS, "min-h-20 py-2")}
-                />
-              </Field>
+              <>
+                <Field label="Observaciones (opcional)">
+                  <textarea
+                    value={observaciones}
+                    onChange={(event) => setObservaciones(event.target.value)}
+                    maxLength={500}
+                    className={cn(FIELD_CLASS, "min-h-20 py-2")}
+                  />
+                </Field>
+                {/* Cierre forzado — solo si hay ventas pendientes o el cajero tiene el permiso */}
+                {canForzarCierre && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3 space-y-2">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-amber-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={forzarPendientes}
+                        onChange={(e) => setForzarPendientes(e.target.checked)}
+                        className="accent-amber-500"
+                      />
+                      Forzar cierre con ventas pendientes sin clasificar
+                    </label>
+                    {forzarPendientes && (
+                      <Field label="Motivo del cierre forzado *">
+                        <input
+                          value={motivoForzado}
+                          onChange={(e) => setMotivoForzado(e.target.value)}
+                          placeholder="Explica por qué cierras con ventas pendientes…"
+                          className={FIELD_CLASS}
+                        />
+                      </Field>
+                    )}
+                  </div>
+                )}
+              </>
             )}
             <button
               type="button"
@@ -1382,9 +1268,19 @@ function CajaDetailView({
     <div className="space-y-4">
       <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <StatCard label="Apertura" value={formatCurrency(detail.montoApertura)} icon={<Banknote size={14} />} />
-        <StatCard label="Entradas" value={formatCurrency(detail.resumen.totalEntradas)} icon={<TrendingUp size={14} />} valueColor="text-emerald-500" />
-        <StatCard label="Salidas" value={formatCurrency(detail.resumen.totalSalidas)} icon={<TrendingDown size={14} />} valueColor="text-red-500" />
-        <StatCard label="Saldo esperado" value={formatCurrency(detail.resumen.saldoEsperado)} icon={<Scale size={14} />} valueColor="text-amber-500" />
+        {detail.resumen.version === "V2" ? (
+          <>
+            <StatCard label="Ventas neto" value={formatCurrency(detail.resumen.totalVentasNeto)} icon={<TrendingUp size={14} />} valueColor="text-emerald-500" />
+            <StatCard label="Digital neto" value={formatCurrency(detail.resumen.totalDigitalNeto)} icon={<TrendingDown size={14} />} valueColor="text-blue-500" />
+            <StatCard label="Efectivo esperado" value={formatCurrency(detail.resumen.efectivoEsperado)} icon={<Scale size={14} />} valueColor="text-amber-500" />
+          </>
+        ) : (
+          <>
+            <StatCard label="Entradas" value={formatCurrency((detail.resumen as { totalEntradas: number }).totalEntradas)} icon={<TrendingUp size={14} />} valueColor="text-emerald-500" />
+            <StatCard label="Salidas" value={formatCurrency((detail.resumen as { totalSalidas: number }).totalSalidas)} icon={<TrendingDown size={14} />} valueColor="text-red-500" />
+            <StatCard label="Saldo esperado" value={formatCurrency(getSaldoEsperado(detail.resumen))} icon={<Scale size={14} />} valueColor="text-amber-500" />
+          </>
+        )}
       </section>
 
       <div className="grid gap-3 lg:grid-cols-3">
@@ -1489,6 +1385,68 @@ function CajaDetailView({
           </div>
         )}
       </section>
+
+      {detail.resumen.version === "V2" && (detail.resumen as CajaResumenV2).porVendedora.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border bg-muted/10 px-3 py-2.5">
+            <h3 className="text-sm font-semibold text-foreground">Ventas por vendedora</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[400px] text-xs">
+              <thead>
+                <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-2.5">Vendedora</th>
+                  <th className="px-3 py-2.5 text-center">Ventas</th>
+                  <th className="px-3 py-2.5 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(detail.resumen as CajaResumenV2).porVendedora.map((v) => (
+                  <tr key={v.vendedoraId} className="hover:bg-muted/30">
+                    <td className="px-3 py-2.5 font-medium text-foreground">{v.username}</td>
+                    <td className="px-3 py-2.5 text-center text-muted-foreground">{v.cantidadVentas}</td>
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-emerald-500">
+                      {formatCurrency(v.totalVentas)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {detail.resumen.version === "V2" && (detail.resumen as CajaResumenV2).resumenProductos.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border bg-muted/10 px-3 py-2.5">
+            <h3 className="text-sm font-semibold text-foreground">Resumen de productos</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-xs">
+              <thead>
+                <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-2.5">Código</th>
+                  <th className="px-3 py-2.5">Producto</th>
+                  <th className="px-3 py-2.5 text-center">Cant.</th>
+                  <th className="px-3 py-2.5 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(detail.resumen as CajaResumenV2).resumenProductos.map((p) => (
+                  <tr key={p.productoId} className="hover:bg-muted/30">
+                    <td className="px-3 py-2.5 font-mono text-muted-foreground">{p.codigo}</td>
+                    <td className="px-3 py-2.5 font-medium text-foreground">{p.nombre}</td>
+                    <td className="px-3 py-2.5 text-center text-muted-foreground">{p.cantidadTotal}</td>
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
+                      {formatCurrency(p.montoTotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border bg-muted/10 px-3 py-2.5 sm:flex-row sm:items-end sm:justify-between">

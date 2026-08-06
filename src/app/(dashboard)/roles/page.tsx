@@ -19,7 +19,8 @@ import type { Permiso, PermisosAgrupados, Rol } from '@/types/api';
 
 type RoleModalState = { mode: 'create' } | { mode: 'edit'; role: Rol };
 
-const PROTECTED_ROLES = ['SUPERADMIN', 'ADMIN', 'CAJERO', 'MOZO', 'COCINA', 'BARTENDER'];
+// Roles activos del sistema. MOZO, COCINA, BARTENDER son obsoletos y no deben reactivarse.
+const PROTECTED_ROLES = ['SUPERADMIN', 'ADMIN', 'CAJERO', 'VENDEDORA'];
 const PAGE_SIZE = 25;
 
 const roleFilters = [

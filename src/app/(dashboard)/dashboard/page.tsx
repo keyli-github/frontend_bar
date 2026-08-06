@@ -290,11 +290,15 @@ export default function DashboardPage() {
       label: 'Caja',
       value: operacion
         ? operacion.caja
-          ? formatCurrency(operacion.caja.resumen.saldoEsperado)
+          ? formatCurrency(operacion.caja.resumen.version === 'V2'
+              ? operacion.caja.resumen.efectivoEsperado
+              : (operacion.caja.resumen as { saldoEsperado: number }).saldoEsperado)
           : 'Cerrada'
         : null,
       detail: operacion?.caja
-        ? `${formatCurrency(operacion.caja.resumen.totalEntradas)} entradas`
+        ? operacion.caja.resumen.version === 'V2'
+          ? `${formatCurrency(operacion.caja.resumen.totalVentasNeto)} en ventas`
+          : `${formatCurrency((operacion.caja.resumen as { totalEntradas: number }).totalEntradas)} entradas`
         : 'Sin turno abierto',
       icon: Landmark,
       href: '/caja',

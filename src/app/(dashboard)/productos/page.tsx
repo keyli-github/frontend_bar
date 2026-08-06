@@ -1,7 +1,7 @@
 "use client";
 
 /** Catalogo global de productos, conectado a ProductosController. */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 import { Pagination } from "@/components/shared/pagination";
@@ -34,8 +34,15 @@ import {
   CheckCircle2,
   XCircle,
   ShoppingCart,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 
 /* ─── helpers ─── */
 const fmt = formatCurrency;
@@ -43,6 +50,57 @@ const PAGE_SIZE = 20;
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiError ? error.message : fallback;
+
+const getProductImgKey = (id: string) => `product_img_${id}`;
+const FALLBACK_IMG = "/assets/trago.webp";
+
+/** Imagen de producto: lee base64 guardado en localStorage, fallback a /assets/trago.webp. */
+function ProductThumb({
+  productId,
+  nombre,
+  className,
+  sizes,
+}: {
+  productId: string;
+  nombre: string;
+  className?: string;
+  sizes?: string;
+}) {
+  const [src, setSrc] = useState<string>(() => {
+    if (typeof window === "undefined") return FALLBACK_IMG;
+    return localStorage.getItem(getProductImgKey(productId)) ?? FALLBACK_IMG;
+  });
+
+  // Actualiza si cambia el producto (ej. después de guardar)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem(getProductImgKey(productId));
+    const newSrc = stored ?? FALLBACK_IMG;
+    // Use functional update to avoid setState directly in body (eslint: set-state-in-effect)
+    void Promise.resolve(newSrc).then((value) => setSrc(value));
+  }, [productId]);
+
+  if (src.startsWith("data:")) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={src}
+        alt={nombre}
+        className={className ?? "object-cover w-full h-full"}
+      />
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt={nombre}
+      fill
+      className={className ?? "object-cover"}
+      sizes={sizes ?? "200px"}
+      onError={() => setSrc(FALLBACK_IMG)}
+    />
+  );
+}
 
 /** Datos del formulario del modal (mapea al payload del backend). */
 interface ProductoForm {
@@ -111,10 +169,9 @@ function ProductCard({
     >
       {/* Image */}
       <div className="relative h-40 bg-muted flex items-center justify-center overflow-hidden">
-        <Image
-          src="/assets/trago.webp"
-          alt={product.nombre}
-          fill
+        <ProductThumb
+          productId={product.id}
+          nombre={product.nombre}
           className="object-cover group-hover:scale-105 transition-transform duration-300"
           sizes="(max-width: 768px) 50vw, 25vw"
         />
@@ -124,7 +181,7 @@ function ProductCard({
         </span>
         {product.disponiblePos && (
           <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-amber-500/80 text-black text-[10px] font-bold">
-            POS
+            VENTA
           </span>
         )}
       </div>
@@ -208,7 +265,7 @@ function ProductCard({
                       ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
                       : "bg-muted/60 text-muted-foreground hover:bg-muted",
                   )}
-                  title="Toggle disponible en POS"
+                  title="Toggle disponible para venta"
                 >
                   <ShoppingCart size={13} />
                 </button>
@@ -245,9 +302,14 @@ function ProductModal({
   saving: boolean;
   error: string | null;
   onClose: () => void;
-  onSave: (data: ProductoForm) => void;
+  onSave: (data: ProductoForm, image: string | null) => void;
 }) {
   const isEdit = !!product;
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(() => {
+    if (typeof window === "undefined" || !product?.id) return null;
+    return localStorage.getItem(getProductImgKey(product.id)) ?? null;
+  });
   const [form, setForm] = useState<ProductoForm>(() =>
     product
       ? {
@@ -281,6 +343,23 @@ function ProductModal({
     form.categoriaId !== "" &&
     form.precioVenta > 0;
 
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Solo se permiten archivos de imagen.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("La imagen no debe superar 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -303,6 +382,55 @@ function ProductModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {/* Imagen */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Imagen del producto
+            </label>
+            <div
+              onClick={() => !saving && imgInputRef.current?.click()}
+              className={cn(
+                "mt-1.5 relative w-full h-36 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center overflow-hidden transition-all",
+                !saving && "cursor-pointer hover:border-amber-500/50 hover:bg-muted/50",
+              )}
+            >
+              {imagePreview ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imagePreview}
+                    alt="preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImagePreview(null);
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors disabled:opacity-50"
+                  >
+                    <X size={13} />
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-muted-foreground pointer-events-none">
+                  <Upload size={22} />
+                  <span className="text-xs font-medium">Haz clic para subir imagen</span>
+                  <span className="text-[10px] opacity-60">JPG, PNG, WEBP · máx 2 MB</span>
+                </div>
+              )}
+            </div>
+            <input
+              ref={imgInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageFile}
+            />
+          </div>
+
           {/* Codigo + Nombre */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -349,21 +477,32 @@ function ProductModal({
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Categoría *
             </label>
-            <select
+            <Select
               value={form.categoriaId}
-              onChange={(e) => set("categoriaId", e.target.value)}
-              className="w-full mt-1.5 h-10 px-3 rounded-lg bg-muted/50 border border-border text-foreground text-sm focus:outline-none focus:border-amber-500/60 transition-all"
+              onValueChange={(v) => set("categoriaId", v ?? "")}
             >
-              {!categorias.some((item) => item.id === form.categoriaId) &&
-                product && (
-                  <option value={product.categoriaId}>{product.categoria}</option>
-                )}
-              {categorias.map((categoria) => (
-                <option key={categoria.id} value={categoria.id}>
-                  {categoria.nombre}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full mt-1.5 h-10 px-3 rounded-lg bg-muted/50 border border-border text-foreground text-sm focus:border-amber-500/60 focus-visible:ring-0 transition-all">
+                <span className="flex-1 text-left truncate">
+                  {categorias.find((c) => c.id === form.categoriaId)?.nombre
+                    ?? (product && !categorias.some((c) => c.id === form.categoriaId)
+                        ? product.categoria
+                        : "Seleccionar categoría...")}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {!categorias.some((item) => item.id === form.categoriaId) &&
+                  product && (
+                    <SelectItem key={product.categoriaId} value={product.categoriaId}>
+                      {product.categoria}
+                    </SelectItem>
+                  )}
+                {categorias.map((categoria) => (
+                  <SelectItem key={categoria.id} value={categoria.id}>
+                    {categoria.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Precios */}
@@ -434,7 +573,7 @@ function ProductModal({
               )}
             >
               <ShoppingCart size={15} />
-              {form.disponiblePos ? "Disponible en POS" : "No en POS"}
+              {form.disponiblePos ? "Disponible para venta" : "No disponible para venta"}
             </button>
             <button
               type="button"
@@ -469,7 +608,7 @@ function ProductModal({
           </button>
           <button
             onClick={() => {
-              if (valid) onSave(form);
+              if (valid) onSave(form, imagePreview);
             }}
             disabled={!valid || saving}
             className="flex-1 h-10 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
@@ -648,7 +787,7 @@ export default function ProductosPage() {
 
   const reload = () => setReloadKey((k) => k + 1);
 
-  const handleCreate = async (data: ProductoForm) => {
+  const handleCreate = async (data: ProductoForm, image: string | null) => {
     setModalSaving(true);
     setModalError(null);
     try {
@@ -662,7 +801,10 @@ export default function ProductosPage() {
         disponiblePos: data.disponiblePos,
         activo: data.activo,
       };
-      await productosApi.createProducto(payload);
+      const created = await productosApi.createProducto(payload);
+      if (image) {
+        localStorage.setItem(getProductImgKey(created.id), image);
+      }
       setCreateOpen(false);
       reload();
     } catch (err) {
@@ -672,7 +814,7 @@ export default function ProductosPage() {
     }
   };
 
-  const handleEdit = async (data: ProductoForm) => {
+  const handleEdit = async (data: ProductoForm, image: string | null) => {
     if (!editProduct) return;
     setModalSaving(true);
     setModalError(null);
@@ -687,6 +829,11 @@ export default function ProductosPage() {
         activo: data.activo,
       };
       await productosApi.updateProducto(editProduct.id, payload);
+      if (image) {
+        localStorage.setItem(getProductImgKey(editProduct.id), image);
+      } else {
+        localStorage.removeItem(getProductImgKey(editProduct.id));
+      }
       setEditProduct(null);
       reload();
     } catch (err) {
@@ -711,7 +858,7 @@ export default function ProductosPage() {
     }
   };
 
-  /** Toggle rápido de activo/POS vía updateProducto (optimista con recarga). */
+  /** Toggle rápido de activo/disponibilidad venta vía updateProducto (optimista con recarga). */
   const quickUpdate = async (p: Producto, patch: UpdateProductoPayload) => {
     setProductos((list) =>
       list.map((it) => (it.id === p.id ? { ...it, ...patch } : it)),
@@ -811,7 +958,7 @@ export default function ProductosPage() {
                 icon: <CheckCircle2 size={16} />,
               },
               {
-                label: "EN POS (PÁGINA)",
+                label: "DISPONIBLES VENTA",
                 value: String(productos.filter((p) => p.disponiblePos).length),
                 color: "text-amber-500",
                 icon: <ShoppingCart size={16} />,
@@ -974,7 +1121,7 @@ export default function ProductosPage() {
                         "Precio venta",
                         "Costo",
                         "Margen",
-                        "POS",
+                        "Venta",
                         "Estado",
                         "",
                       ].map((h) => (
@@ -999,11 +1146,10 @@ export default function ProductosPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                              <Image
-                                src="/assets/trago.webp"
-                                alt={p.nombre}
-                                fill
-                                className="object-cover"
+                              <ProductThumb
+                                productId={p.id}
+                                nombre={p.nombre}
+                                className="object-cover w-full h-full"
                                 sizes="36px"
                               />
                             </div>
@@ -1051,7 +1197,7 @@ export default function ProductosPage() {
                                 : "bg-muted text-muted-foreground",
                             )}
                           >
-                            {p.disponiblePos ? "✓ POS" : "No POS"}
+                            {p.disponiblePos ? "✓ Venta" : "No disp."}
                           </span>
                         </td>
                         <td className="px-4 py-3">

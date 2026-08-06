@@ -3,9 +3,6 @@
  *
  * Se declara aqui una vez y lo consumen el sidebar, el header y el bottom-nav
  * movil. Anadir una ruta en un solo sitio evita que los tres se desincronicen.
- *
- * Las rutas operativas consumen modulos reales del backend. Ventas se mantiene
- * como excepcion informativa y no ejecuta acciones hasta que exista su API.
  */
 import {
   LayoutDashboard,
@@ -24,7 +21,9 @@ import {
   Package,
   ShieldCheck,
   Truck,
-  UtensilsCrossed,
+  Wine,
+  ShoppingCart,
+  Wallet,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -52,9 +51,10 @@ export const NAV_ROOT: NavItem = {
 export const NAV_MODULES: NavModule[] = [
   {
     id: 'operaciones',
-    label: 'Caja',
+    label: 'Operaciones',
     icon: BarChart3,
     items: [
+      { name: 'Ventas', href: '/ventas', icon: ShoppingCart, title: 'Registro de Ventas' },
       { name: 'Caja', href: '/caja', icon: Landmark },
     ],
   },
@@ -63,7 +63,7 @@ export const NAV_MODULES: NavModule[] = [
     label: 'Inventario',
     icon: Package,
     items: [
-      { name: 'Productos', href: '/productos', icon: UtensilsCrossed },
+      { name: 'Productos', href: '/productos', icon: Wine },
       { name: 'Categorías', href: '/categorias', icon: Tags },
       { name: 'Inventario', href: '/inventario', icon: Package },
       { name: 'Kardex', href: '/kardex', icon: FileText },
@@ -81,6 +81,7 @@ export const NAV_MODULES: NavModule[] = [
     label: 'Administración',
     icon: Settings,
     items: [
+      { name: 'Etiquetas', href: '/etiquetas', icon: Wallet, title: 'Billeteras Digitales' },
       { name: 'Usuarios', href: '/usuarios', icon: Users },
       { name: 'Sucursales', href: '/sucursales', icon: Home },
       { name: 'Roles', href: '/roles', icon: Shield },
@@ -126,7 +127,7 @@ export function getActiveModuleId(pathname: string): string {
 /** Accesos rapidos del bottom-nav movil, en orden de uso previsto. */
 export const MOBILE_NAV: NavItem[] = [
   NAV_ROOT,
+  { name: 'Ventas', href: '/ventas', icon: ShoppingCart },
+  { name: 'Caja', href: '/caja', icon: Landmark },
   { name: 'Usuarios', href: '/usuarios', icon: Users },
-  { name: 'Sucursales', href: '/sucursales', icon: Home },
-  { name: 'Auditoría', href: '/auditoria', icon: ScrollText },
 ];

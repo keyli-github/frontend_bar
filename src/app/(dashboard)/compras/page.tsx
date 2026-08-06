@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { useBoneyardBuild } from "@/hooks/use-boneyard-build";
 import { useAuthStore } from "@/store/auth-store";
 import { comprasApi, productosApi, ApiError } from "@/lib/api";
+import { listEstablecimientos } from "@/lib/api/establecimientos.api";
 import { hasPermission } from "@/lib/roles";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ import type {
   CreateCompraPayload,
   CreateCompraItem,
   Producto,
+  Establecimiento,
 } from "@/types/api";
 import {
   Plus,
@@ -340,6 +342,9 @@ function NewOrderModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const user = useAuthStore((state) => state.user);
+  const isSuperadmin = user?.rol === "SUPERADMIN";
+
   const [proveedorId, setProveedorId] = useState("");
   const [eta, setEta] = useState("");
   const [notas, setNotas] = useState("");
@@ -348,6 +353,8 @@ function NewOrderModal({
   const [loadingProds, setLoadingProds] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sedes, setSedes] = useState<Establecimiento[]>([]);
+  const [sedeId, setSedeId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -367,6 +374,23 @@ function NewOrderModal({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    let cancelled = false;
+    listEstablecimientos({ pagina: 1, limite: 100 })
+      .then((res) => {
+        if (!cancelled) {
+          const active = res.data.filter((s) => s.activo !== false);
+          setSedes(active);
+          if (active.length > 0) setSedeId(active[0].id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError("No se pudieron cargar las sedes.");
+      });
+    return () => { cancelled = true; };
+  }, [isSuperadmin]);
+
   const addItem = () =>
     setItems((it) => [...it, { productoId: "", cantidad: 1, costoUnit: 0 }]);
   const removeItem = (i: number) =>
@@ -383,7 +407,10 @@ function NewOrderModal({
 
   const total = items.reduce((s, it) => s + it.cantidad * it.costoUnit, 0);
   const validItems = items.filter((it) => it.productoId && it.cantidad > 0);
-  const valid = proveedorId !== "" && validItems.length > 0;
+  const valid =
+    proveedorId !== "" &&
+    validItems.length > 0 &&
+    (!isSuperadmin || sedeId !== "");
 
   const submit = async () => {
     if (!valid) return;
@@ -392,6 +419,7 @@ function NewOrderModal({
     try {
       const payload: CreateCompraPayload = {
         proveedorId,
+        sedeId: isSuperadmin ? sedeId : undefined,
         eta: eta || undefined,
         notas: notas.trim() || undefined,
         items: validItems.map<CreateCompraItem>((it) => ({
@@ -450,6 +478,26 @@ function NewOrderModal({
               />
             </div>
           </div>
+
+          {isSuperadmin && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Sede *
+              </label>
+              <select
+                value={sedeId}
+                onChange={(e) => setSedeId(e.target.value)}
+                className="w-full mt-1.5 h-10 px-3 rounded-lg bg-card border border-border text-foreground focus:outline-none focus:border-amber-500/50 transition-all text-sm"
+              >
+                <option value="">Seleccionar sede...</option>
+                {sedes.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Item builder */}
           <div>
