@@ -517,6 +517,15 @@ function HistorialPanel({
       setConcError("Selecciona la billetera digital usada.");
       return;
     }
+    const etiqueta = etiquetas.find((item) => item.id === concEtiquetaId);
+    if (
+      concEstado === "BILLETERA" &&
+      etiqueta?.requiereComprobante &&
+      !concComprobante.trim()
+    ) {
+      setConcError("Ingresa el comprobante requerido por esta billetera.");
+      return;
+    }
     setConcSaving(true);
     setConcError(null);
     try {
@@ -686,7 +695,7 @@ function HistorialPanel({
                 </label>
                 {etiquetaSeleccionada?.requiereComprobante && (
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Comprobante / voucher
+                    Comprobante / voucher *
                     <input
                       value={concComprobante}
                       onChange={(e) => setConcComprobante(e.target.value)}

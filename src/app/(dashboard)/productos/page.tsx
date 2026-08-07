@@ -66,10 +66,7 @@ function ProductThumb({
   className?: string;
   sizes?: string;
 }) {
-  const [src, setSrc] = useState<string>(() => {
-    if (typeof window === "undefined") return FALLBACK_IMG;
-    return localStorage.getItem(getProductImgKey(productId)) ?? FALLBACK_IMG;
-  });
+  const [src, setSrc] = useState<string>(FALLBACK_IMG);
 
   // Actualiza si cambia el producto (ej. después de guardar)
   useEffect(() => {
@@ -81,12 +78,14 @@ function ProductThumb({
   }, [productId]);
 
   if (src.startsWith("data:")) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
-      <img
+      <Image
         src={src}
         alt={nombre}
-        className={className ?? "object-cover w-full h-full"}
+        fill
+        unoptimized
+        sizes={sizes ?? "200px"}
+        className={className ?? "object-cover"}
       />
     );
   }
@@ -306,10 +305,7 @@ function ProductModal({
 }) {
   const isEdit = !!product;
   const imgInputRef = useRef<HTMLInputElement>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(() => {
-    if (typeof window === "undefined" || !product?.id) return null;
-    return localStorage.getItem(getProductImgKey(product.id)) ?? null;
-  });
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [form, setForm] = useState<ProductoForm>(() =>
     product
       ? {
@@ -324,6 +320,14 @@ function ProductModal({
         }
       : emptyForm(categorias[0]?.id),
   );
+
+  useEffect(() => {
+    const stored =
+      open && product?.id
+        ? localStorage.getItem(getProductImgKey(product.id))
+        : null;
+    void Promise.resolve(stored).then((value) => setImagePreview(value));
+  }, [open, product?.id]);
 
   if (!open) return null;
 

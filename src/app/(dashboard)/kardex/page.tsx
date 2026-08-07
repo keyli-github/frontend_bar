@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import type {
   KardexMovimiento,
   KardexQuery,
+  KardexResumen,
   MovimientoTipo,
 } from "@/types/api";
 import {
@@ -25,31 +26,63 @@ import {
   Zap,
   ArrowRight,
   History,
+  RotateCcw,
+  ShoppingCart,
 } from "lucide-react";
 
 const PAGE_SIZE = 25;
 
-const filters = ["Todos", "ENTRADA", "SALIDA", "AJUSTE", "TRASLADO"] as const;
+const filters: Array<{ value: "Todos" | MovimientoTipo; label: string }> = [
+  { value: "Todos", label: "Todos" },
+  { value: "ENTRADA", label: "Entrada" },
+  { value: "SALIDA", label: "Salida" },
+  { value: "AJUSTE", label: "Ajuste" },
+  { value: "TRASLADO", label: "Traslado" },
+  { value: "SALIDA_VENTA", label: "Venta" },
+  { value: "ENTRADA_ANULACION", label: "Anulacion" },
+];
 
-const tipoBadge: Record<MovimientoTipo, { bg: string; icon: React.ReactNode }> =
-  {
-    ENTRADA: {
-      bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
-      icon: <ArrowUp size={10} />,
-    },
-    SALIDA: {
-      bg: "bg-red-500/10 border-red-500/30 text-red-400",
-      icon: <ArrowDown size={10} />,
-    },
-    AJUSTE: {
-      bg: "bg-amber-500/10 border-amber-500/30 text-amber-400",
-      icon: <Zap size={10} />,
-    },
-    TRASLADO: {
-      bg: "bg-blue-500/10 border-blue-500/30 text-blue-400",
-      icon: <ArrowRight size={10} />,
-    },
-  };
+const tipoBadge: Record<
+  MovimientoTipo,
+  { bg: string; icon: React.ReactNode; label: string }
+> = {
+  ENTRADA: {
+    bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+    icon: <ArrowUp size={10} />,
+    label: "Entrada",
+  },
+  SALIDA: {
+    bg: "bg-red-500/10 border-red-500/30 text-red-400",
+    icon: <ArrowDown size={10} />,
+    label: "Salida",
+  },
+  AJUSTE: {
+    bg: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+    icon: <Zap size={10} />,
+    label: "Ajuste",
+  },
+  TRASLADO: {
+    bg: "bg-blue-500/10 border-blue-500/30 text-blue-400",
+    icon: <ArrowRight size={10} />,
+    label: "Traslado",
+  },
+  SALIDA_VENTA: {
+    bg: "bg-red-500/10 border-red-500/30 text-red-400",
+    icon: <ShoppingCart size={10} />,
+    label: "Venta",
+  },
+  ENTRADA_ANULACION: {
+    bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+    icon: <RotateCcw size={10} />,
+    label: "Anulación",
+  },
+};
+
+const esEntrada = (tipo: MovimientoTipo) =>
+  tipo === "ENTRADA" || tipo === "ENTRADA_ANULACION";
+
+const esSalida = (tipo: MovimientoTipo) =>
+  tipo === "SALIDA" || tipo === "SALIDA_VENTA";
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiError ? error.message : fallback;
@@ -63,8 +96,9 @@ export default function KardexPage() {
   const boneyardBuild = useBoneyardBuild();
   const canRead = boneyardBuild || hasPermission(permisos, "kardex:leer");
 
-  const [activeFilter, setActiveFilter] =
-    useState<(typeof filters)[number]>("Todos");
+  const [activeFilter, setActiveFilter] = useState<"Todos" | MovimientoTipo>(
+    "Todos",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
@@ -74,6 +108,12 @@ export default function KardexPage() {
   const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [resumen, setResumen] = useState<KardexResumen>({
+    totalMovimientos: 0,
+    entradas: 0,
+    salidas: 0,
+    valorTotal: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -98,13 +138,22 @@ export default function KardexPage() {
     if (dateFrom) query.desde = toYmd(dateFrom);
     if (dateTo) query.hasta = toYmd(dateTo);
 
-    kardexApi
-      .listKardex(query)
-      .then((res) => {
+    Promise.all([
+      kardexApi.listKardex(query),
+      kardexApi.getKardexResumen({
+        q: query.q,
+        tipo: query.tipo,
+        desde: query.desde,
+        hasta: query.hasta,
+        sedeId: query.sedeId,
+      }),
+    ])
+      .then(([res, summary]) => {
         if (cancelled) return;
         setMovimientos(res.data);
         setTotal(res.total);
         setTotalPaginas(res.totalPaginas || 1);
+        setResumen(summary);
         setError(null);
       })
       .catch((err: unknown) => {
@@ -118,7 +167,15 @@ export default function KardexPage() {
     return () => {
       cancelled = true;
     };
-  }, [canRead, pagina, debouncedSearch, activeFilter, dateFrom, dateTo, reloadKey]);
+  }, [
+    canRead,
+    pagina,
+    debouncedSearch,
+    activeFilter,
+    dateFrom,
+    dateTo,
+    reloadKey,
+  ]);
 
   /** Cambia de página SIN resetear loading: contenido previo permanece visible. */
   const irAPagina = useCallback((page: number) => {
@@ -132,11 +189,6 @@ export default function KardexPage() {
       </div>
     );
   }
-
-  /** KPIs derivados de la pagina cargada (el backend no expone un resumen). */
-  const pageEntradas = movimientos.filter((k) => k.tipo === "ENTRADA").length;
-  const pageSalidas = movimientos.filter((k) => k.tipo === "SALIDA").length;
-  const pageValor = movimientos.reduce((s, k) => s + Math.abs(k.valor), 0);
 
   return (
     <div
@@ -166,48 +218,53 @@ export default function KardexPage() {
         )}
 
         {/* KPIs */}
-        <Bones name="kardex-kpis" loading={loading} onRetry={reload} placeholder={<BoneKpis count={4} />}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
-          {[
-            {
-              label: "TOTAL MOVIMIENTOS",
-              value: String(total),
-              color: "text-foreground",
-            },
-            {
-              label: "ENTRADAS (PÁGINA)",
-              value: String(pageEntradas),
-              color: "text-emerald-400",
-            },
-            {
-              label: "SALIDAS (PÁGINA)",
-              value: String(pageSalidas),
-              color: "text-red-400",
-            },
-            {
-              label: "VALOR (PÁGINA)",
-              value: formatCurrency(pageValor),
-              color: "text-amber-500",
-            },
-          ].map((k) => (
-            <div
-              key={k.label}
-              className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3"
-            >
-              <p className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">
-                {k.label}
-              </p>
-              <p
-                className={cn(
-                  "text-base lg:text-lg font-bold font-mono mt-1",
-                  k.color,
-                )}
+        <Bones
+          name="kardex-kpis"
+          loading={loading}
+          onRetry={reload}
+          placeholder={<BoneKpis count={4} />}
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-children">
+            {[
+              {
+                label: "TOTAL MOVIMIENTOS",
+                value: String(resumen.totalMovimientos),
+                color: "text-foreground",
+              },
+              {
+                label: "ENTRADAS",
+                value: String(resumen.entradas),
+                color: "text-emerald-400",
+              },
+              {
+                label: "SALIDAS",
+                value: String(resumen.salidas),
+                color: "text-red-400",
+              },
+              {
+                label: "VALOR TOTAL",
+                value: formatCurrency(resumen.valorTotal),
+                color: "text-amber-500",
+              },
+            ].map((k) => (
+              <div
+                key={k.label}
+                className="rounded-xl border border-border bg-card px-3 py-2 lg:px-4 lg:py-3"
               >
-                {k.value}
-              </p>
-            </div>
-          ))}
-        </div>
+                <p className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">
+                  {k.label}
+                </p>
+                <p
+                  className={cn(
+                    "text-base lg:text-lg font-bold font-mono mt-1",
+                    k.color,
+                  )}
+                >
+                  {k.value}
+                </p>
+              </div>
+            ))}
+          </div>
         </Bones>
 
         {/* Filters bar */}
@@ -225,21 +282,21 @@ export default function KardexPage() {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {filters.map((f) => (
+            {filters.map((filter) => (
               <button
-                key={f}
+                key={filter.value}
                 onClick={() => {
-                  setActiveFilter(f);
+                  setActiveFilter(filter.value);
                   setPagina(1);
                 }}
                 className={cn(
                   "px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
-                  activeFilter === f
+                  activeFilter === filter.value
                     ? "bg-amber-500 text-black"
                     : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                {f}
+                {filter.label}
               </button>
             ))}
           </div>
@@ -282,23 +339,28 @@ export default function KardexPage() {
                 <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      {([
-                        ["ID", "w-20"],
-                        ["Fecha", "w-24"],
-                        ["Hora", "w-16"],
-                        ["Producto", "min-w-[160px]"],
-                        ["Codigo", "w-24"],
-                        ["Tipo", "w-20"],
-                        ["Cant.", "w-20"],
-                        ["Stock ant.", "w-20"],
-                        ["Stock nuevo", "w-20"],
-                        ["Valor", "w-20"],
-                        ["Referencia", "min-w-[120px]"],
-                        ["Usuario", "w-24"],
-                      ] as [string, string][]).map(([h, w]) => (
+                      {(
+                        [
+                          ["ID", "w-20"],
+                          ["Fecha", "w-24"],
+                          ["Hora", "w-16"],
+                          ["Producto", "min-w-[160px]"],
+                          ["Codigo", "w-24"],
+                          ["Tipo", "w-20"],
+                          ["Cant.", "w-20"],
+                          ["Stock ant.", "w-20"],
+                          ["Stock nuevo", "w-20"],
+                          ["Valor", "w-20"],
+                          ["Referencia", "min-w-[120px]"],
+                          ["Usuario", "w-24"],
+                        ] as [string, string][]
+                      ).map(([h, w]) => (
                         <th
                           key={h}
-                          className={cn("px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap", w)}
+                          className={cn(
+                            "px-4 py-3 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap",
+                            w,
+                          )}
                         >
                           {h}
                         </th>
@@ -307,10 +369,7 @@ export default function KardexPage() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {movimientos.map((k) => {
-                      const badge = tipoBadge[k.tipo] || {
-                        bg: "bg-gray-500/10 border-gray-500/30 text-gray-400",
-                        icon: <History size={10} />,
-                      };
+                      const badge = tipoBadge[k.tipo];
                       return (
                         <tr
                           key={k.id}
@@ -339,26 +398,23 @@ export default function KardexPage() {
                               )}
                             >
                               {badge.icon}
-                              {k.tipo}
+                              {badge.label}
                             </span>
                           </td>
                           <td className="px-4 py-3 w-20">
                             <span
                               className={cn(
                                 "font-bold",
-                                k.tipo === "ENTRADA"
+                                esEntrada(k.tipo)
                                   ? "text-emerald-400"
-                                  : k.tipo === "SALIDA"
+                                  : esSalida(k.tipo)
                                     ? "text-red-400"
                                     : k.tipo === "AJUSTE"
                                       ? "text-amber-400"
                                       : "text-blue-400",
                               )}
                             >
-                              {k.tipo === "SALIDA" ||
-                              (k.tipo === "AJUSTE" && k.cantidad < 0)
-                                ? ""
-                                : "+"}
+                              {k.cantidad > 0 ? "+" : ""}
                               {k.cantidad} {k.unidad}
                             </span>
                           </td>

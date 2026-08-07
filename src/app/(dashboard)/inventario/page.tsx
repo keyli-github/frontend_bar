@@ -48,22 +48,34 @@ const errorMessage = (error: unknown, fallback: string) =>
 
 function StockBar({
   stock,
-  min,
   max,
+  estado,
 }: {
   stock: number;
-  min: number;
   max: number;
+  estado: InventarioItem["estado"];
 }) {
   const pct = max > 0 ? Math.min((stock / max) * 100, 100) : 0;
   const color =
-    stock <= min / 2
+    estado === "CRITICO"
       ? "bg-red-500"
-      : stock <= min
+      : estado === "ALERTA"
         ? "bg-amber-500"
         : "bg-emerald-500";
   return (
-    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+    <div
+      className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
+      title={
+        max > 0
+          ? `Stock ${stock} de objetivo ${max}`
+          : "Sin objetivo de reposición"
+      }
+      aria-label={
+        max > 0
+          ? `Stock ${stock} de objetivo ${max}`
+          : "Sin objetivo de reposición"
+      }
+    >
       <div
         className={cn("h-full rounded-full transition-all", color)}
         style={{ width: `${pct}%` }}
@@ -80,7 +92,7 @@ export default function InventarioPage() {
   const canRead = boneyardBuild || hasPermission(permisos, "inventario:leer");
   const canEdit = hasPermission(permisos, "inventario:editar");
   const canCreateProduct = hasPermission(permisos, "productos:crear");
-  const canConfigure = hasPermission(permisos, "inventario:crear");
+  const canCreateConfig = hasPermission(permisos, "inventario:crear");
   const canReadProducts = hasPermission(permisos, "productos:leer");
   const canReadEstablishments = hasPermission(
     permisos,
@@ -88,8 +100,8 @@ export default function InventarioPage() {
   );
   const canReadCategories = hasPermission(permisos, "categorias:leer");
   const isSuperadmin = user?.rol === "SUPERADMIN";
-  const canCreateConfig =
-    canConfigure &&
+  const canCreateInventory =
+    canCreateConfig &&
     canReadProducts &&
     (!isSuperadmin || canReadEstablishments);
 
@@ -197,7 +209,7 @@ export default function InventarioPage() {
   useEffect(() => {
     if (configItem === undefined) return;
     if (configItem) return;
-    if (!canCreateConfig) return;
+    if (!canCreateInventory) return;
     let cancelled = false;
 
     const loadProducts = async () => {
@@ -259,7 +271,7 @@ export default function InventarioPage() {
     return () => {
       cancelled = true;
     };
-  }, [canCreateConfig, configItem, isSuperadmin]);
+  }, [canCreateInventory, configItem, isSuperadmin]);
 
   /** Cambia de página SIN resetear loading: el contenido previo permanece visible. */
   const irAPagina = useCallback((page: number) => {
@@ -275,7 +287,7 @@ export default function InventarioPage() {
   };
 
   const openConfig = (item: InventarioItem | null = null) => {
-    if (!canConfigure || (!item && !canCreateConfig)) return;
+    if (item ? !canEdit : !canCreateInventory) return;
     setProducts([]);
     setEstablishments([]);
     setConfigProductId(item?.productoId ?? "");
@@ -318,6 +330,12 @@ export default function InventarioPage() {
       stockMax < 0
     ) {
       setConfigError("El stock máximo debe ser un número mayor o igual a 0.");
+      return;
+    }
+    if (stockMax !== 0 && stockMax < stockMin) {
+      setConfigError(
+        "El objetivo de reposición debe ser 0 o mayor o igual al stock mínimo.",
+      );
       return;
     }
 
@@ -403,9 +421,9 @@ export default function InventarioPage() {
           title="Inventario"
           subtitle={`${total} productos con stock configurado`}
           action={
-            canCreateConfig || (canCreateProduct && canReadProducts) ? (
+            canCreateInventory || (canCreateProduct && canReadProducts) ? (
               <div className="flex flex-wrap gap-2">
-                {canCreateConfig && (
+                {canCreateInventory && (
                   <button
                     onClick={() => openConfig()}
                     className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold tracking-wide text-black transition-all hover:bg-amber-400 active:scale-[0.98]"
@@ -591,13 +609,14 @@ export default function InventarioPage() {
                             </span>
                             <StockBar
                               stock={item.stock}
-                              min={item.min}
                               max={item.max}
+                              estado={item.estado}
                             />
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">
-                          {item.min}/{item.max}
+                          {item.min}/
+                          {item.max > 0 ? item.max : "Sin objetivo"}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={item.estado} />
@@ -609,16 +628,14 @@ export default function InventarioPage() {
                           {item.ubicacion}
                         </td>
                         <td className="px-4 py-3">
-                          {canEdit || canConfigure ? (
+                          {canEdit ? (
                             <div className="flex items-center gap-2">
-                              {canConfigure && (
-                                <button
-                                  onClick={() => openConfig(item)}
-                                  className="rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                                >
-                                  Configurar
-                                </button>
-                              )}
+                              <button
+                                onClick={() => openConfig(item)}
+                                className="rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                              >
+                                Configurar
+                              </button>
                               {canEdit && (
                                 <button
                                   onClick={() => openAdjust(item)}
@@ -741,7 +758,7 @@ export default function InventarioPage() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Stock máximo *
+                    Objetivo de reposición *
                   </label>
                   <input
                     type="number"
@@ -752,6 +769,9 @@ export default function InventarioPage() {
                     disabled={configSaving}
                     className="mt-1.5 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition-all focus:border-amber-500/50 disabled:opacity-60"
                   />
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    0 = sin objetivo; orienta la reposición y no limita las entradas.
+                  </p>
                 </div>
               </div>
 
