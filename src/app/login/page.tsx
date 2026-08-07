@@ -64,7 +64,7 @@ export default function LoginPage() {
           {/* Logo */}
           <div>
             <Image
-              src="/assets/barbeer.webp"
+              src="/assets/barbeerLogo.png"
               alt="Bar Beer"
               width={200}
               height={200}
@@ -119,7 +119,7 @@ export default function LoginPage() {
           {/* Logo móvil */}
           <div className="lg:hidden flex justify-center mb-8">
             <Image
-              src="/assets/barbeer.webp"
+              src="/assets/barbeerLogo.png"
               alt="Bar Beer"
               width={200}
               height={200}

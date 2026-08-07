@@ -15,9 +15,9 @@ export const metadata: Metadata = {
   title: 'Bar beer — ERP System',
   description: 'Sistema de gestión para bares y restaurantes',
   icons: {
-    icon: '/assets/barbeer.webp',
-    shortcut: '/assets/barbeer.webp',
-    apple: '/assets/barbeer.webp',
+    icon: '/assets/barbeerLogo.png',
+    shortcut: '/assets/barbeerLogo.png',
+    apple: '/assets/barbeerLogo.png',
   },
 };
 

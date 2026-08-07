@@ -34,6 +34,7 @@ import {
   rolesApi,
 } from '@/lib/api';
 import * as cajaApi from '@/lib/api/caja.api';
+import * as ventasApi from '@/lib/api/ventas.api';
 import { formatCurrency } from '@/lib/format';
 import { getRoleLabel, hasPermission } from '@/lib/roles';
 import type {
@@ -48,7 +49,7 @@ import type {
   SessionInfo,
 } from '@/types/api';
 import type { CajaSesion } from '@/types/caja';
-import type { KardexChartPoint } from './_charts';
+import type { KardexChartPoint, VentaChartPoint } from './_charts';
 import {
   ArrowRight,
   Boxes,
@@ -159,6 +160,10 @@ export default function DashboardPage() {
   const [sesiones, setSesiones]   = useState<SessionInfo[] | null>(null);
   const [operacion, setOperacion] = useState<OperationalData | null>(null);
   const [kardexChart, setKardexChart] = useState<KardexChartPoint[] | null>(null);
+  const [ventasChart, setVentasChart] = useState<VentaChartPoint[] | null>(null);
+  const [ventasTotalHoy, setVentasTotalHoy] = useState(0);
+  const [ventasTotalMes, setVentasTotalMes] = useState(0);
+  const [ventasCountHoy, setVentasCountHoy] = useState(0);
 
   // ── Efectos ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -268,6 +273,63 @@ export default function DashboardPage() {
 
     return () => { cancelled = true; };
   }, [verKardex]);
+
+  // Ventas para cajero / vendedora (últimos 7 días)
+  const verMisVentas  = hasPermission(permisos, 'ventas:leer-propias');
+  const verTodasVentas = hasPermission(permisos, 'ventas:leer');
+
+  useEffect(() => {
+    const canLoad = verMisVentas || verTodasVentas;
+    if (!canLoad) return;
+    let cancelled = false;
+
+    const DAY_NAMES_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const today = new Date();
+    const hoy   = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const mes   = new Date(today.getFullYear(), today.getMonth(), 1);
+    const hace7 = new Date(hoy); hace7.setDate(hace7.getDate() - 6);
+
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(hoy); d.setDate(d.getDate() - (6 - i));
+      return d;
+    });
+
+    const loader = verMisVentas
+      ? () => ventasApi.listMisVentas({ limite: 200, pagina: 1 })
+      : () => ventasApi.listVentas({ limite: 200, pagina: 1 });
+
+    loader().then((result) => {
+      if (cancelled) return;
+      const byDay: Record<string, number> = {};
+      days.forEach((d) => { byDay[d.toISOString().split('T')[0]] = 0; });
+
+      let totalHoy = 0, totalMes = 0, countHoy = 0;
+
+      for (const v of result.data) {
+        if (v.estado === 'ANULADA') continue;
+        const total = v.total ?? 0;
+        const dt = new Date(v.createdAt);
+        const dKey = dt.toISOString().split('T')[0];
+        if (byDay[dKey] !== undefined) byDay[dKey] += total;
+        const dNorm = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+        if (dNorm >= hoy) { totalHoy += total; countHoy++; }
+        if (dNorm >= mes) totalMes += total;
+      }
+
+      setVentasTotalHoy(totalHoy);
+      setVentasTotalMes(totalMes);
+      setVentasCountHoy(countHoy);
+      setVentasChart(
+        days.map((d) => ({
+          dia: DAY_NAMES_ES[d.getDay()],
+          total: byDay[d.toISOString().split('T')[0]] ?? 0,
+          cantidad: 0,
+        })),
+      );
+    }).catch(() => { if (!cancelled) setVentasChart([]); });
+
+    return () => { cancelled = true; };
+  }, [verMisVentas, verTodasVentas]);
 
   // ── Derivados ─────────────────────────────────────────────────────────────
   const totalUsuarios = roles?.reduce((n, r) => n + r._count.usuarios, 0) ?? null;
@@ -391,8 +453,9 @@ export default function DashboardPage() {
   ];
 
   const showCharts =
-    operacion !== null &&
-    (verKardex || verInventario || verAsistencia || verCompras || verRoles);
+    (operacion !== null &&
+      (verKardex || verInventario || verAsistencia || verCompras || verRoles)) ||
+    (ventasChart !== null && ventasChart.length > 0);
 
   return (
     <div className="min-h-full space-y-5 p-4 lg:p-6">
@@ -453,6 +516,10 @@ export default function DashboardPage() {
             verAsistencia={verAsistencia}
             verCompras={verCompras}
             verRoles={verRoles}
+            ventasChartData={ventasChart}
+            ventasTotalHoy={ventasTotalHoy}
+            ventasTotalMes={ventasTotalMes}
+            ventasCountHoy={ventasCountHoy}
           />
         </section>
       )}

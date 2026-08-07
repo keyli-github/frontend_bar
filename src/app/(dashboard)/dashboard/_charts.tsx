@@ -52,6 +52,13 @@ export interface KardexChartPoint {
   Salidas: number;
 }
 
+// Nuevo: punto de ventas para cajero/vendedora
+export interface VentaChartPoint {
+  dia: string;
+  total: number;
+  cantidad: number;
+}
+
 export interface DashboardChartsProps {
   kardexData?: KardexChartPoint[] | null;
   inventarioData?: InventarioResumen | null;
@@ -64,6 +71,44 @@ export interface DashboardChartsProps {
   verAsistencia: boolean;
   verCompras: boolean;
   verRoles: boolean;
+  // Nuevos para cajero/vendedora
+  ventasChartData?: VentaChartPoint[] | null;
+  ventasTotalHoy?: number;
+  ventasTotalMes?: number;
+  ventasCountHoy?: number;
+}
+
+// ─── Bar Chart: Ventas 7 días (cajero / vendedora) ───────────────────────────
+
+function BarChartVentas({ data, color = '#2563EB' }: { data: VentaChartPoint[]; color?: string }) {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={TOOLTIP_STYLE} className="px-3 py-2">
+        <p className="font-semibold text-foreground">{label}</p>
+        <p style={{ color }} className="text-xs">
+          S/ {payload[0].value.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+        </p>
+      </div>
+    );
+  };
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}
+        barCategoryGap="28%">
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e2e8f0)" vertical={false} />
+        <XAxis dataKey="dia" tick={TICK} axisLine={false} tickLine={false} />
+        <YAxis tick={TICK} axisLine={false} tickLine={false}
+          tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : String(v)} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--muted, #f1f5f9)', radius: 6 }} />
+        <Bar dataKey="total" fill={color} radius={[6, 6, 0, 0]}>
+          {data.map((_, i) => (
+            <Cell key={i} fill={i === data.length - 1 ? color : `${color}55`} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
 }
 
 // ─── Area Chart: Kardex 7 días ────────────────────────────────────────────────
@@ -226,7 +271,13 @@ export default function DashboardCharts({
   verAsistencia,
   verCompras,
   verRoles,
+  ventasChartData,
+  ventasTotalHoy = 0,
+  ventasTotalMes = 0,
+  ventasCountHoy = 0,
 }: DashboardChartsProps) {
+  // Gráfica de ventas — cajero/vendedora
+  const showVentas = ventasChartData !== null && ventasChartData !== undefined && ventasChartData.length > 0;
   // Gráfica de área — kardex últimos 7 días
   const showArea = verKardex && kardexData !== null && kardexData !== undefined;
 
@@ -277,10 +328,68 @@ export default function DashboardCharts({
 
   const showAnyDonut = showInv || showAsist || showCompras;
 
-  if (!showArea && !showRolesBar && !showAnyDonut) return null;
+  if (!showArea && !showRolesBar && !showAnyDonut && !showVentas) return null;
 
   return (
     <div className="space-y-4">
+      {/* ── Gráfica de ventas — solo cajero/vendedora ── */}
+      {showVentas && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* KPI hoy */}
+          <div className="surface flex flex-col gap-1 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Ventas hoy
+            </p>
+            <p className="font-mono text-2xl font-bold text-primary">
+              {formatCurrency(ventasTotalHoy)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {ventasCountHoy} transacciones
+            </p>
+          </div>
+          {/* KPI mes */}
+          <div className="surface flex flex-col gap-1 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Total del mes
+            </p>
+            <p className="font-mono text-2xl font-bold text-emerald-500">
+              {formatCurrency(ventasTotalMes)}
+            </p>
+            <p className="text-xs text-muted-foreground">Mes en curso</p>
+          </div>
+          {/* Ticket promedio */}
+          <div className="surface flex flex-col gap-1 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Ticket promedio hoy
+            </p>
+            <p className="font-mono text-2xl font-bold text-foreground">
+              {ventasCountHoy > 0
+                ? formatCurrency(ventasTotalHoy / ventasCountHoy)
+                : '—'}
+            </p>
+            <p className="text-xs text-muted-foreground">Por venta</p>
+          </div>
+        </div>
+      )}
+      {showVentas && (
+        <section className="surface p-4 lg:p-5">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-foreground">
+              Ventas — últimos 7 días
+            </h2>
+            <p className="text-[11px] text-muted-foreground">
+              Total en soles por día (barra más oscura = hoy)
+            </p>
+          </div>
+          {ventasChartData!.every((d) => d.total === 0) ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Sin ventas registradas en los últimos 7 días
+            </p>
+          ) : (
+            <BarChartVentas data={ventasChartData!} />
+          )}
+        </section>
+      )}
       {/* ── Fila 1: Área + Barras ── */}
       {(showArea || showRolesBar) && (
         <div className={`grid gap-4 ${showArea && showRolesBar ? 'lg:grid-cols-[1fr_340px]' : ''}`}>
