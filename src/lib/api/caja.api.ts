@@ -10,7 +10,6 @@ import type {
   CajaSesion,
   CajaSesionHistorial,
   CierreV2Payload,
-  MovimientoCajaPayload,
 } from "@/types/caja";
 
 export async function getCajaActual(
@@ -64,21 +63,6 @@ export async function listMovimientosCaja(
         tipo: query.tipo,
       },
     },
-  );
-  return data;
-}
-
-/**
- * @deprecated Bloqueado por regla de negocio en sesiones V2 (422).
- * Solo funciona para sesiones V1 legacy (si el usuario tiene caja:movimientos).
- */
-export async function registrarMovimientoCaja(
-  cajaId: string,
-  payload: MovimientoCajaPayload,
-): Promise<CajaMovimiento> {
-  const { data } = await api.post<CajaMovimiento>(
-    `/caja/${cajaId}/movimientos`,
-    payload,
   );
   return data;
 }

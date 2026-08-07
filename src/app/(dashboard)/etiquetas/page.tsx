@@ -220,7 +220,7 @@ export default function EtiquetasPage() {
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {etiquetas
+              {[...etiquetas]
                 .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
                 .map((etiqueta) => (
                   <div

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowDown,
@@ -101,12 +102,15 @@ export default function CajaPage() {
   const [detail, setDetail] = useState<CajaDetalle | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailMovimientos, setDetailMovimientos] = useState<CajaMovimiento[]>([]);
+  const [detailMovimientos, setDetailMovimientos] = useState<CajaMovimiento[]>(
+    [],
+  );
   const [detailMovPage, setDetailMovPage] = useState(1);
   const [detailMovTotal, setDetailMovTotal] = useState(0);
   const [detailMovTotalPages, setDetailMovTotalPages] = useState(1);
-  const [detailMovTipo, setDetailMovTipo] =
-    useState<"" | CajaMovimientoTipo>("");
+  const [detailMovTipo, setDetailMovTipo] = useState<"" | CajaMovimientoTipo>(
+    "",
+  );
   const [detailMovLoading, setDetailMovLoading] = useState(false);
   const [detailMovError, setDetailMovError] = useState<string | null>(null);
 
@@ -125,7 +129,8 @@ export default function CajaPage() {
   const detailMovRequestId = useRef(0);
   const montoApertura = CAJA_DENOMINACIONES.reduce(
     (total, denominacion) =>
-      total + denominacion * Number(denominationCounts[String(denominacion)] || 0),
+      total +
+      denominacion * Number(denominationCounts[String(denominacion)] || 0),
     0,
   );
 
@@ -171,7 +176,10 @@ export default function CajaPage() {
       setCaja(current);
       setMovPage(1);
       const page = current
-        ? await cajaApi.listMovimientosCaja(current.id, { pagina: 1, limite: 25 })
+        ? await cajaApi.listMovimientosCaja(current.id, {
+            pagina: 1,
+            limite: 25,
+          })
         : null;
       if (requestId !== loadRequestId.current) return;
 
@@ -204,16 +212,22 @@ export default function CajaPage() {
     };
   }, [loadCaja]);
 
-  const irAMovPage = useCallback(async (page: number) => {
-    if (!caja) return;
-    setMovPage(page);
-    try {
-      const result = await cajaApi.listMovimientosCaja(caja.id, { pagina: page, limite: 25 });
-      setMovimientos(result.data);
-      setMovTotal(result.total);
-      setMovTotalPages(result.totalPaginas || 1);
-    } catch {}
-  }, [caja]);
+  const irAMovPage = useCallback(
+    async (page: number) => {
+      if (!caja) return;
+      setMovPage(page);
+      try {
+        const result = await cajaApi.listMovimientosCaja(caja.id, {
+          pagina: page,
+          limite: 25,
+        });
+        setMovimientos(result.data);
+        setMovTotal(result.total);
+        setMovTotalPages(result.totalPaginas || 1);
+      } catch {}
+    },
+    [caja],
+  );
 
   const loadHistory = useCallback(async () => {
     const requestId = ++historyRequestId.current;
@@ -224,8 +238,7 @@ export default function CajaPage() {
         pagina: historyPage,
         limite: HISTORY_PAGE_SIZE,
         estado: historyEstado || undefined,
-        sedeId:
-          isSuperadmin && historySedeId ? historySedeId : undefined,
+        sedeId: isSuperadmin && historySedeId ? historySedeId : undefined,
       });
       if (requestId !== historyRequestId.current) return;
       setHistoryRows(page.data);
@@ -405,7 +418,9 @@ export default function CajaPage() {
       return;
     }
     if (arqueoMode === "cierre" && forzarPendientes && !motivoForzado.trim()) {
-      setArqueoError("Debes indicar el motivo para cerrar con ventas pendientes.");
+      setArqueoError(
+        "Debes indicar el motivo para cerrar con ventas pendientes.",
+      );
       return;
     }
     setSaving(true);
@@ -432,7 +447,11 @@ export default function CajaPage() {
     } catch (reason) {
       const msg = errorMessage(reason, "No se pudo completar el arqueo.");
       // Si hay ventas pendientes, ofrecer cierre forzado
-      if (reason instanceof ApiError && (reason.message?.includes("VENTAS_PENDIENTES") || reason.message?.includes("pendientes"))) {
+      if (
+        reason instanceof ApiError &&
+        (reason.message?.includes("VENTAS_PENDIENTES") ||
+          reason.message?.includes("pendientes"))
+      ) {
         setArqueoError(msg + " Activa 'Forzar cierre' para continuar.");
       } else {
         setArqueoError(msg);
@@ -487,7 +506,9 @@ export default function CajaPage() {
                 >
                   <Icon
                     size={14}
-                    className={activeTab === value ? "text-amber-500" : undefined}
+                    className={
+                      activeTab === value ? "text-amber-500" : undefined
+                    }
                   />
                   {label}
                 </button>
@@ -551,7 +572,10 @@ export default function CajaPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
                   {Array.from({ length: 10 }, (_, i) => (
-                    <div key={i} className="rounded-lg border border-border bg-muted/20 p-2">
+                    <div
+                      key={i}
+                      className="rounded-lg border border-border bg-muted/20 p-2"
+                    >
                       <Bone className="h-3 w-full" />
                       <Bone className="mt-1.5 h-7 w-full" />
                     </div>
@@ -564,334 +588,373 @@ export default function CajaPage() {
               </div>
             }
           >
-          <div className="space-y-4">
-        {error && (
-          <p
-            role="alert"
-            className="rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </p>
-        )}
-
-        {!loading && !caja && (
-          <section className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex items-center gap-3 border-b border-border bg-muted/15 px-4 py-3">
-              <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                <Landmark size={18} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-foreground">Caja cerrada</h2>
-                  <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Sin turno
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{selectedSedeName}</p>
-              </div>
-            </div>
-            {canOpen ? (
-              <div className="p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">Fondo de apertura</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      Ingresa la cantidad física por denominación.
-                    </p>
-                  </div>
-                  <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    10 denominaciones
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
-                  {CAJA_DENOMINACIONES.map((denominacion) => (
-                    <label
-                      key={denominacion}
-                      className="rounded-lg border border-border bg-muted/20 p-2 text-center transition-colors focus-within:border-amber-500/50 focus-within:bg-amber-500/[0.04]"
-                    >
-                      <span className="block text-[11px] font-bold text-foreground">
-                        S/ {denominacion.toFixed(denominacion < 1 ? 2 : 0)}
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="999999"
-                        step="1"
-                        inputMode="numeric"
-                        aria-label={`Cantidad de S/ ${denominacion}`}
-                        value={denominationCounts[String(denominacion)]}
-                        onChange={(event) =>
-                          setDenominationCounts((current) => ({
-                            ...current,
-                            [String(denominacion)]: event.target.value,
-                          }))
-                        }
-                        className="mt-1.5 h-8 w-full rounded-md border border-border bg-card px-1 text-center font-mono text-xs text-foreground outline-none focus:border-amber-500/60"
-                        placeholder="0"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <span className="block text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Total calculado
-                    </span>
-                    <strong className="font-mono text-lg text-amber-500">
-                      {formatCurrency(montoApertura)}
-                    </strong>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void abrir()}
-                    disabled={saving || !effectiveSedeId}
-                    className="h-9 rounded-lg bg-amber-500 px-5 text-xs font-bold text-black transition-colors hover:bg-amber-400 disabled:opacity-50"
-                  >
-                    {saving ? "ABRIENDO…" : "ABRIR CAJA"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No tienes permiso para abrir caja.
-              </p>
-            )}
-          </section>
-        )}
-
-        {caja && (
-          <>
-            <section className="flex flex-col gap-3 rounded-xl border border-border bg-card px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
-                  <span className="text-sm font-semibold text-emerald-500">
-                    Caja abierta
-                  </span>
-                  <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
-                    {caja.id.slice(0, 8)}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {selectedSedeName} · {formatDateTime(caja.abiertaAt)} ·{" "}
-                  {caja.usuarioApertura.username}
+            <div className="space-y-4">
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                >
+                  {error}
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {canPreclose && (
-                  <button
-                    type="button"
-                    onClick={() => { setArqueoError(null); setForzarPendientes(false); setMotivoForzado(""); setArqueoMode("precuadre"); }}
-                    className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/25 px-3 text-xs font-semibold text-amber-500 transition-colors hover:bg-amber-500/10"
-                  >
-                    <Calculator size={14} /> Precuadre
-                  </button>
-                )}
-                {canClose && (
-                  <button
-                    type="button"
-                    onClick={() => { setArqueoError(null); setForzarPendientes(false); setMotivoForzado(""); setArqueoMode("cierre"); }}
-                    className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/25 px-3 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10"
-                  >
-                    <LockKeyhole size={14} /> Cerrar
-                  </button>
-                )}
-              </div>
-            </section>
-
-            <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <StatCard
-                label="Apertura"
-                value={formatCurrency(caja.montoApertura)}
-                icon={<Banknote size={14} />}
-              />
-              {caja.resumen.version === "V2" ? (
-                <>
-                  <StatCard
-                    label="Ventas neto"
-                    value={formatCurrency(caja.resumen.totalVentasNeto)}
-                    icon={<TrendingUp size={14} />}
-                    valueColor="text-emerald-500"
-                  />
-                  <StatCard
-                    label="Digital neto"
-                    value={formatCurrency(caja.resumen.totalDigitalNeto)}
-                    icon={<TrendingDown size={14} />}
-                    valueColor="text-blue-500"
-                  />
-                  <StatCard
-                    label="Efectivo esperado"
-                    value={formatCurrency(caja.resumen.efectivoEsperado)}
-                    icon={<Scale size={14} />}
-                    valueColor="text-amber-500"
-                  />
-                </>
-              ) : (
-                <>
-                  <StatCard
-                    label="Entradas"
-                    value={formatCurrency((caja.resumen as { totalEntradas: number }).totalEntradas)}
-                    icon={<TrendingUp size={14} />}
-                    valueColor="text-emerald-500"
-                  />
-                  <StatCard
-                    label="Salidas"
-                    value={formatCurrency((caja.resumen as { totalSalidas: number }).totalSalidas)}
-                    icon={<TrendingDown size={14} />}
-                    valueColor="text-red-500"
-                  />
-                  <StatCard
-                    label="Saldo esperado"
-                    value={formatCurrency(getSaldoEsperado(caja.resumen))}
-                    icon={<Scale size={14} />}
-                    valueColor="text-amber-500"
-                  />
-                </>
               )}
-            </section>
 
-            {/* Indicador de ventas pendientes V2 */}
-            {caja.resumen.version === "V2" && (caja.resumen as CajaResumenV2).ventasPendientes > 0 && (
-              <section className="flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
-                <Clock size={14} className="shrink-0 text-amber-500" />
-                <p className="text-muted-foreground">
-                  <span className="font-semibold text-amber-500">
-                    {(caja.resumen as CajaResumenV2).ventasPendientes} venta{(caja.resumen as CajaResumenV2).ventasPendientes !== 1 ? "s" : ""} sin clasificar.
-                  </span>{" "}
-                  El cajero debe clasificarlas como Efectivo o Billetera antes del cierre.
-                </p>
-                <a href="/ventas" className="ml-auto flex shrink-0 items-center gap-1 text-amber-500 hover:underline">
-                  <ShoppingCart size={12} /> Ver ventas
-                </a>
-              </section>
-            )}
-
-            {/* Indicador de sesión V1 (legacy) */}
-            {caja.resumen.version === "V1" && (
-              <section className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
-                <AlertTriangle size={14} className="shrink-0" />
-                Sesión legacy (V1). Las ventas y la conciliación de pagos no están disponibles para esta sesión.
-              </section>
-            )}
-
-            {caja.precuadreAt && (
-              <section className="flex flex-col gap-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-semibold text-amber-500">
-                  Último precuadre: {formatDateTime(caja.precuadreAt)}
-                </p>
-                <p className="text-muted-foreground">
-                  Declarado {formatCurrency(caja.montoDeclaradoPrecuadre ?? 0)}{" "}
-                  · Diferencia {formatCurrency(caja.diferenciaPrecuadre ?? 0)}
-                </p>
-              </section>
-            )}
-
-            <section className="overflow-hidden rounded-xl border border-border bg-card">
-              <div className="flex items-center justify-between border-b border-border bg-muted/10 px-4 py-3">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Movimientos del turno
-                </h2>
-                <span className="text-xs text-muted-foreground">
-                  {movimientos.length} registros
-                </span>
-              </div>
-              {movimientos.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  Aún no hay movimientos.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-xs">
-                    <thead>
-                      <tr className="border-b border-border">
-                        {[
-                          "Fecha",
-                          "Tipo",
-                          "Concepto",
-                          "Método",
-                          "Monto",
-                          "Comprobante",
-                          "Usuario",
-                        ].map((heading) => (
-                          <th
-                            key={heading}
-                            className="px-3 py-2.5 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+              {!loading && !caja && (
+                <section className="overflow-hidden rounded-xl border border-border bg-card">
+                  <div className="flex items-center gap-3 border-b border-border bg-muted/15 px-4 py-3">
+                    <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                      <Landmark size={18} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-sm font-bold text-foreground">
+                          Caja cerrada
+                        </h2>
+                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Sin turno
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {selectedSedeName}
+                      </p>
+                    </div>
+                  </div>
+                  {canOpen ? (
+                    <div className="p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">
+                            Fondo de apertura
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            Ingresa la cantidad física por denominación.
+                          </p>
+                        </div>
+                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          10 denominaciones
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-10">
+                        {CAJA_DENOMINACIONES.map((denominacion) => (
+                          <label
+                            key={denominacion}
+                            className="rounded-lg border border-border bg-muted/20 p-2 text-center transition-colors focus-within:border-amber-500/50 focus-within:bg-amber-500/[0.04]"
                           >
-                            {heading}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {movimientos.map((movimiento) => (
-                        <tr key={movimiento.id} className="hover:bg-muted/30">
-                          <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-muted-foreground">
-                            {formatDateTime(movimiento.createdAt)}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span
-                              className={cn(
-                                "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold",
-                                movimiento.tipo === "ENTRADA"
-                                  ? "bg-emerald-500/10 text-emerald-500"
-                                  : "bg-red-500/10 text-red-500",
-                              )}
-                            >
-                              {movimiento.tipo === "ENTRADA" ? (
-                                <ArrowUp size={10} />
-                              ) : (
-                                <ArrowDown size={10} />
-                              )}
-                              {movimiento.tipo}
+                            <span className="block text-[11px] font-bold text-foreground">
+                              S/{" "}
+                              {denominacion.toFixed(denominacion < 1 ? 2 : 0)}
                             </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-xs font-medium text-foreground">
-                            {movimiento.concepto}
-                          </td>
-                          <td className="px-3 py-2.5 text-xs font-medium text-muted-foreground">
-                            {movimiento.medioPago}
-                          </td>
-                          <td
-                            className={cn(
-                              "px-3 py-2.5 font-mono text-xs font-semibold",
-                              movimiento.tipo === "ENTRADA"
-                                ? "text-emerald-500"
-                                : "text-red-500",
-                            )}
-                          >
-                            {movimiento.tipo === "ENTRADA" ? "+" : "-"}
-                            {formatCurrency(movimiento.monto)}
-                          </td>
-                          <td className="max-w-[180px] truncate px-3 py-2.5 text-[11px] text-muted-foreground">
-                            {movimiento.comprobante ??
-                              movimiento.referencia ??
-                              "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
-                            {movimiento.usuario?.username ?? "Sistema"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                            <input
+                              type="number"
+                              min="0"
+                              max="999999"
+                              step="1"
+                              inputMode="numeric"
+                              aria-label={`Cantidad de S/ ${denominacion}`}
+                              value={denominationCounts[String(denominacion)]}
+                              onChange={(event) =>
+                                setDenominationCounts((current) => ({
+                                  ...current,
+                                  [String(denominacion)]: event.target.value,
+                                }))
+                              }
+                              className="mt-1.5 h-8 w-full rounded-md border border-border bg-card px-1 text-center font-mono text-xs text-foreground outline-none focus:border-amber-500/60"
+                              placeholder="0"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <span className="block text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                            Total calculado
+                          </span>
+                          <strong className="font-mono text-lg text-amber-500">
+                            {formatCurrency(montoApertura)}
+                          </strong>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void abrir()}
+                          disabled={saving || !effectiveSedeId}
+                          className="h-9 rounded-lg bg-amber-500 px-5 text-xs font-bold text-black transition-colors hover:bg-amber-400 disabled:opacity-50"
+                        >
+                          {saving ? "ABRIENDO…" : "ABRIR CAJA"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      No tienes permiso para abrir caja.
+                    </p>
+                  )}
+                </section>
               )}
-              <div className="border-t border-border px-4">
-                <Pagination
-                  page={movPage}
-                  totalPages={movTotalPages}
-                  total={movTotal}
-                  pageSize={25}
-                  onPageChange={irAMovPage}
-                />
-              </div>
-            </section>
-          </>
-        )}
+
+              {caja && (
+                <>
+                  <section className="flex flex-col gap-3 rounded-xl border border-border bg-card px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="size-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+                        <span className="text-sm font-semibold text-emerald-500">
+                          Caja abierta
+                        </span>
+                        <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
+                          {caja.id.slice(0, 8)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {selectedSedeName} · {formatDateTime(caja.abiertaAt)} ·{" "}
+                        {caja.usuarioApertura.username}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {canPreclose && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setArqueoError(null);
+                            setForzarPendientes(false);
+                            setMotivoForzado("");
+                            setArqueoMode("precuadre");
+                          }}
+                          className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-500/25 px-3 text-xs font-semibold text-amber-500 transition-colors hover:bg-amber-500/10"
+                        >
+                          <Calculator size={14} /> Precuadre
+                        </button>
+                      )}
+                      {canClose && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setArqueoError(null);
+                            setForzarPendientes(false);
+                            setMotivoForzado("");
+                            setArqueoMode("cierre");
+                          }}
+                          className="flex h-9 items-center gap-1.5 rounded-lg border border-red-500/25 px-3 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10"
+                        >
+                          <LockKeyhole size={14} /> Cerrar
+                        </button>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <StatCard
+                      label="Apertura"
+                      value={formatCurrency(caja.montoApertura)}
+                      icon={<Banknote size={14} />}
+                    />
+                    {caja.resumen.version === "V2" ? (
+                      <>
+                        <StatCard
+                          label="Ventas neto"
+                          value={formatCurrency(caja.resumen.totalVentasNeto)}
+                          icon={<TrendingUp size={14} />}
+                          valueColor="text-emerald-500"
+                        />
+                        <StatCard
+                          label="Digital neto"
+                          value={formatCurrency(caja.resumen.totalDigitalNeto)}
+                          icon={<TrendingDown size={14} />}
+                          valueColor="text-blue-500"
+                        />
+                        <StatCard
+                          label="Efectivo esperado"
+                          value={formatCurrency(caja.resumen.efectivoEsperado)}
+                          icon={<Scale size={14} />}
+                          valueColor="text-amber-500"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <StatCard
+                          label="Entradas"
+                          value={formatCurrency(
+                            (caja.resumen as { totalEntradas: number })
+                              .totalEntradas,
+                          )}
+                          icon={<TrendingUp size={14} />}
+                          valueColor="text-emerald-500"
+                        />
+                        <StatCard
+                          label="Salidas"
+                          value={formatCurrency(
+                            (caja.resumen as { totalSalidas: number })
+                              .totalSalidas,
+                          )}
+                          icon={<TrendingDown size={14} />}
+                          valueColor="text-red-500"
+                        />
+                        <StatCard
+                          label="Saldo esperado"
+                          value={formatCurrency(getSaldoEsperado(caja.resumen))}
+                          icon={<Scale size={14} />}
+                          valueColor="text-amber-500"
+                        />
+                      </>
+                    )}
+                  </section>
+
+                  {/* Indicador de ventas pendientes V2 */}
+                  {caja.resumen.version === "V2" &&
+                    (caja.resumen as CajaResumenV2).ventasPendientes > 0 && (
+                      <section className="flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
+                        <Clock size={14} className="shrink-0 text-amber-500" />
+                        <p className="text-muted-foreground">
+                          <span className="font-semibold text-amber-500">
+                            {(caja.resumen as CajaResumenV2).ventasPendientes}{" "}
+                            venta
+                            {(caja.resumen as CajaResumenV2)
+                              .ventasPendientes !== 1
+                              ? "s"
+                              : ""}{" "}
+                            sin clasificar.
+                          </span>{" "}
+                          El cajero debe clasificarlas como Efectivo o Billetera
+                          antes del cierre.
+                        </p>
+                        <Link
+                          href="/ventas"
+                          className="ml-auto flex shrink-0 items-center gap-1 text-amber-500 hover:underline"
+                        >
+                          <ShoppingCart size={12} /> Ver ventas
+                        </Link>
+                      </section>
+                    )}
+
+                  {/* Indicador de sesión V1 (legacy) */}
+                  {caja.resumen.version === "V1" && (
+                    <section className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+                      <AlertTriangle size={14} className="shrink-0" />
+                      Sesión legacy (V1). Las ventas y la conciliación de pagos
+                      no están disponibles para esta sesión.
+                    </section>
+                  )}
+
+                  {caja.precuadreAt && (
+                    <section className="flex flex-col gap-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                      <p className="font-semibold text-amber-500">
+                        Último precuadre: {formatDateTime(caja.precuadreAt)}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Declarado{" "}
+                        {formatCurrency(caja.montoDeclaradoPrecuadre ?? 0)} ·
+                        Diferencia{" "}
+                        {formatCurrency(caja.diferenciaPrecuadre ?? 0)}
+                      </p>
+                    </section>
+                  )}
+
+                  <section className="overflow-hidden rounded-xl border border-border bg-card">
+                    <div className="flex items-center justify-between border-b border-border bg-muted/10 px-4 py-3">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Movimientos del turno
+                      </h2>
+                      <span className="text-xs text-muted-foreground">
+                        {movimientos.length} registros
+                      </span>
+                    </div>
+                    {movimientos.length === 0 ? (
+                      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        Aún no hay movimientos.
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[760px] text-xs">
+                          <thead>
+                            <tr className="border-b border-border">
+                              {[
+                                "Fecha",
+                                "Tipo",
+                                "Concepto",
+                                "Origen / método",
+                                "Monto",
+                                "Comprobante",
+                                "Usuario",
+                              ].map((heading) => (
+                                <th
+                                  key={heading}
+                                  className="px-3 py-2.5 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+                                >
+                                  {heading}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {movimientos.map((movimiento) => (
+                              <tr
+                                key={movimiento.id}
+                                className="hover:bg-muted/30"
+                              >
+                                <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-muted-foreground">
+                                  {formatDateTime(movimiento.createdAt)}
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold",
+                                      movimiento.tipo === "ENTRADA"
+                                        ? "bg-emerald-500/10 text-emerald-500"
+                                        : "bg-red-500/10 text-red-500",
+                                    )}
+                                  >
+                                    {movimiento.tipo === "ENTRADA" ? (
+                                      <ArrowUp size={10} />
+                                    ) : (
+                                      <ArrowDown size={10} />
+                                    )}
+                                    {movimiento.tipo}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 text-xs font-medium text-foreground">
+                                  {movimiento.concepto}
+                                </td>
+                                <td className="px-3 py-2.5 text-xs font-medium text-muted-foreground">
+                                  {movimiento.medioPago ?? movimiento.origen}
+                                </td>
+                                <td
+                                  className={cn(
+                                    "px-3 py-2.5 font-mono text-xs font-semibold",
+                                    movimiento.tipo === "ENTRADA"
+                                      ? "text-emerald-500"
+                                      : "text-red-500",
+                                  )}
+                                >
+                                  {movimiento.tipo === "ENTRADA" ? "+" : "-"}
+                                  {formatCurrency(movimiento.monto)}
+                                </td>
+                                <td className="max-w-[180px] truncate px-3 py-2.5 text-[11px] text-muted-foreground">
+                                  {movimiento.comprobante ??
+                                    movimiento.referencia ??
+                                    "—"}
+                                </td>
+                                <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
+                                  {movimiento.usuario?.username ?? "Sistema"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="border-t border-border px-4">
+                      <Pagination
+                        page={movPage}
+                        totalPages={movTotalPages}
+                        total={movTotal}
+                        pageSize={25}
+                        onPageChange={irAMovPage}
+                      />
+                    </div>
+                  </section>
+                </>
+              )}
             </div>
           </Bones>
         )}
-
 
         {activeTab === "historial" && (
           <section className="overflow-hidden rounded-xl border border-border bg-card">
@@ -901,7 +964,8 @@ export default function CajaPage() {
                   Sesiones de caja
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Consulta sesiones abiertas y cerradas registradas por el backend.
+                  Consulta sesiones abiertas y cerradas registradas por el
+                  backend.
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -1135,19 +1199,25 @@ export default function CajaPage() {
                 placeholder="0.00"
               />
             </Field>
-            {montoDeclarado !== '' && !isNaN(Number(montoDeclarado)) && caja && (
-              <div
-                className={cn(
-                  'flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold',
-                  Number(montoDeclarado) - getSaldoEsperado(caja.resumen) >= 0
-                    ? 'bg-emerald-500/10 text-emerald-500'
-                    : 'bg-red-500/10 text-red-500',
-                )}
-              >
-                <span>Diferencia</span>
-                <span>{formatCurrency(Number(montoDeclarado) - getSaldoEsperado(caja.resumen))}</span>
-              </div>
-            )}
+            {montoDeclarado !== "" &&
+              !isNaN(Number(montoDeclarado)) &&
+              caja && (
+                <div
+                  className={cn(
+                    "flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold",
+                    Number(montoDeclarado) - getSaldoEsperado(caja.resumen) >= 0
+                      ? "bg-emerald-500/10 text-emerald-500"
+                      : "bg-red-500/10 text-red-500",
+                  )}
+                >
+                  <span>Diferencia</span>
+                  <span>
+                    {formatCurrency(
+                      Number(montoDeclarado) - getSaldoEsperado(caja.resumen),
+                    )}
+                  </span>
+                </div>
+              )}
             {arqueoMode === "cierre" && (
               <>
                 <Field label="Observaciones (opcional)">
@@ -1210,7 +1280,11 @@ export default function CajaPage() {
 
 function CajaDetailSkeleton() {
   return (
-    <div className="space-y-3" aria-label="Cargando detalle de caja" role="status">
+    <div
+      className="space-y-3"
+      aria-label="Cargando detalle de caja"
+      role="status"
+    >
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <Bone key={index} className="h-20 rounded-xl" />
@@ -1267,18 +1341,56 @@ function CajaDetailView({
   return (
     <div className="space-y-4">
       <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <StatCard label="Apertura" value={formatCurrency(detail.montoApertura)} icon={<Banknote size={14} />} />
+        <StatCard
+          label="Apertura"
+          value={formatCurrency(detail.montoApertura)}
+          icon={<Banknote size={14} />}
+        />
         {detail.resumen.version === "V2" ? (
           <>
-            <StatCard label="Ventas neto" value={formatCurrency(detail.resumen.totalVentasNeto)} icon={<TrendingUp size={14} />} valueColor="text-emerald-500" />
-            <StatCard label="Digital neto" value={formatCurrency(detail.resumen.totalDigitalNeto)} icon={<TrendingDown size={14} />} valueColor="text-blue-500" />
-            <StatCard label="Efectivo esperado" value={formatCurrency(detail.resumen.efectivoEsperado)} icon={<Scale size={14} />} valueColor="text-amber-500" />
+            <StatCard
+              label="Ventas neto"
+              value={formatCurrency(detail.resumen.totalVentasNeto)}
+              icon={<TrendingUp size={14} />}
+              valueColor="text-emerald-500"
+            />
+            <StatCard
+              label="Digital neto"
+              value={formatCurrency(detail.resumen.totalDigitalNeto)}
+              icon={<TrendingDown size={14} />}
+              valueColor="text-blue-500"
+            />
+            <StatCard
+              label="Efectivo esperado"
+              value={formatCurrency(detail.resumen.efectivoEsperado)}
+              icon={<Scale size={14} />}
+              valueColor="text-amber-500"
+            />
           </>
         ) : (
           <>
-            <StatCard label="Entradas" value={formatCurrency((detail.resumen as { totalEntradas: number }).totalEntradas)} icon={<TrendingUp size={14} />} valueColor="text-emerald-500" />
-            <StatCard label="Salidas" value={formatCurrency((detail.resumen as { totalSalidas: number }).totalSalidas)} icon={<TrendingDown size={14} />} valueColor="text-red-500" />
-            <StatCard label="Saldo esperado" value={formatCurrency(getSaldoEsperado(detail.resumen))} icon={<Scale size={14} />} valueColor="text-amber-500" />
+            <StatCard
+              label="Entradas"
+              value={formatCurrency(
+                (detail.resumen as { totalEntradas: number }).totalEntradas,
+              )}
+              icon={<TrendingUp size={14} />}
+              valueColor="text-emerald-500"
+            />
+            <StatCard
+              label="Salidas"
+              value={formatCurrency(
+                (detail.resumen as { totalSalidas: number }).totalSalidas,
+              )}
+              icon={<TrendingDown size={14} />}
+              valueColor="text-red-500"
+            />
+            <StatCard
+              label="Saldo esperado"
+              value={formatCurrency(getSaldoEsperado(detail.resumen))}
+              icon={<Scale size={14} />}
+              valueColor="text-amber-500"
+            />
           </>
         )}
       </section>
@@ -1286,18 +1398,37 @@ function CajaDetailView({
       <div className="grid gap-3 lg:grid-cols-3">
         <DetailSection title="Apertura">
           <DetailValue label="Sede" value={detail.sede.nombre} />
-          <DetailValue label="Estado" value={<CajaStatus estado={detail.estado} />} />
+          <DetailValue
+            label="Estado"
+            value={<CajaStatus estado={detail.estado} />}
+          />
           <DetailValue label="Fecha" value={formatDateTime(detail.abiertaAt)} />
-          <DetailValue label="Usuario" value={detail.usuarioApertura.username} />
-          <DetailValue label="Monto" value={formatCurrency(detail.montoApertura)} />
-          <DetailValue label="Creada" value={formatDateTime(detail.createdAt)} />
-          <DetailValue label="Actualizada" value={formatDateTime(detail.updatedAt)} />
+          <DetailValue
+            label="Usuario"
+            value={detail.usuarioApertura.username}
+          />
+          <DetailValue
+            label="Monto"
+            value={formatCurrency(detail.montoApertura)}
+          />
+          <DetailValue
+            label="Creada"
+            value={formatDateTime(detail.createdAt)}
+          />
+          <DetailValue
+            label="Actualizada"
+            value={formatDateTime(detail.updatedAt)}
+          />
         </DetailSection>
 
         <DetailSection title="Precuadre">
           <DetailValue
             label="Fecha"
-            value={detail.precuadreAt ? formatDateTime(detail.precuadreAt) : "No realizado"}
+            value={
+              detail.precuadreAt
+                ? formatDateTime(detail.precuadreAt)
+                : "No realizado"
+            }
           />
           <DetailValue
             label="Usuario"
@@ -1320,7 +1451,11 @@ function CajaDetailView({
         <DetailSection title="Cierre">
           <DetailValue
             label="Fecha"
-            value={detail.cerradaAt ? formatDateTime(detail.cerradaAt) : "Caja aún abierta"}
+            value={
+              detail.cerradaAt
+                ? formatDateTime(detail.cerradaAt)
+                : "Caja aún abierta"
+            }
           />
           <DetailValue
             label="Usuario"
@@ -1386,72 +1521,92 @@ function CajaDetailView({
         )}
       </section>
 
-      {detail.resumen.version === "V2" && (detail.resumen as CajaResumenV2).porVendedora.length > 0 && (
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="border-b border-border bg-muted/10 px-3 py-2.5">
-            <h3 className="text-sm font-semibold text-foreground">Ventas por vendedora</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[400px] text-xs">
-              <thead>
-                <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-3 py-2.5">Vendedora</th>
-                  <th className="px-3 py-2.5 text-center">Ventas</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {(detail.resumen as CajaResumenV2).porVendedora.map((v) => (
-                  <tr key={v.vendedoraId} className="hover:bg-muted/30">
-                    <td className="px-3 py-2.5 font-medium text-foreground">{v.username}</td>
-                    <td className="px-3 py-2.5 text-center text-muted-foreground">{v.cantidadVentas}</td>
-                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-emerald-500">
-                      {formatCurrency(v.totalVentas)}
-                    </td>
+      {detail.resumen.version === "V2" &&
+        (detail.resumen as CajaResumenV2).porVendedora.length > 0 && (
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border bg-muted/10 px-3 py-2.5">
+              <h3 className="text-sm font-semibold text-foreground">
+                Ventas por vendedora
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[400px] text-xs">
+                <thead>
+                  <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-3 py-2.5">Vendedora</th>
+                    <th className="px-3 py-2.5 text-center">Ventas</th>
+                    <th className="px-3 py-2.5 text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(detail.resumen as CajaResumenV2).porVendedora.map((v) => (
+                    <tr key={v.vendedoraId} className="hover:bg-muted/30">
+                      <td className="px-3 py-2.5 font-medium text-foreground">
+                        {v.username}
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-muted-foreground">
+                        {v.cantidadVentas}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-emerald-500">
+                        {formatCurrency(v.totalVentas)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
-      {detail.resumen.version === "V2" && (detail.resumen as CajaResumenV2).resumenProductos.length > 0 && (
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="border-b border-border bg-muted/10 px-3 py-2.5">
-            <h3 className="text-sm font-semibold text-foreground">Resumen de productos</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-xs">
-              <thead>
-                <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-3 py-2.5">Código</th>
-                  <th className="px-3 py-2.5">Producto</th>
-                  <th className="px-3 py-2.5 text-center">Cant.</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {(detail.resumen as CajaResumenV2).resumenProductos.map((p) => (
-                  <tr key={p.productoId} className="hover:bg-muted/30">
-                    <td className="px-3 py-2.5 font-mono text-muted-foreground">{p.codigo}</td>
-                    <td className="px-3 py-2.5 font-medium text-foreground">{p.nombre}</td>
-                    <td className="px-3 py-2.5 text-center text-muted-foreground">{p.cantidadTotal}</td>
-                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
-                      {formatCurrency(p.montoTotal)}
-                    </td>
+      {detail.resumen.version === "V2" &&
+        (detail.resumen as CajaResumenV2).resumenProductos.length > 0 && (
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border bg-muted/10 px-3 py-2.5">
+              <h3 className="text-sm font-semibold text-foreground">
+                Resumen de productos
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-xs">
+                <thead>
+                  <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-3 py-2.5">Código</th>
+                    <th className="px-3 py-2.5">Producto</th>
+                    <th className="px-3 py-2.5 text-center">Cant.</th>
+                    <th className="px-3 py-2.5 text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(detail.resumen as CajaResumenV2).resumenProductos.map(
+                    (p) => (
+                      <tr key={p.productoId} className="hover:bg-muted/30">
+                        <td className="px-3 py-2.5 font-mono text-muted-foreground">
+                          {p.codigo}
+                        </td>
+                        <td className="px-3 py-2.5 font-medium text-foreground">
+                          {p.nombre}
+                        </td>
+                        <td className="px-3 py-2.5 text-center text-muted-foreground">
+                          {p.cantidadTotal}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
+                          {formatCurrency(p.montoTotal)}
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border bg-muted/10 px-3 py-2.5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Movimientos</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              Movimientos
+            </h3>
             <p className="mt-1 text-xs text-muted-foreground">
               {movementTotal} registros encontrados
             </p>
@@ -1499,7 +1654,7 @@ function CajaDetailView({
                       "Tipo",
                       "Origen",
                       "Concepto",
-                      "Medio",
+                      "Medio / origen",
                       "Monto",
                       "Referencia",
                       "Comprobante",
@@ -1539,7 +1694,7 @@ function CajaDetailView({
                         {movimiento.concepto}
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground">
-                        {movimiento.medioPago}
+                        {movimiento.medioPago ?? movimiento.origen}
                       </td>
                       <td
                         className={cn(
@@ -1635,9 +1790,7 @@ function Field({
   return (
     <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
       {label}
-      <span className="mt-1 block normal-case tracking-normal">
-        {children}
-      </span>
+      <span className="mt-1 block normal-case tracking-normal">{children}</span>
     </label>
   );
 }

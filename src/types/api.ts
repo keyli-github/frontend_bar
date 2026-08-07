@@ -186,7 +186,7 @@ export interface AssignPermisosPayload {
 // PERMISOS
 // ============================================================
 
-/** Campos que devuelve `POST /permisos` y `PATCH /permisos/:id`. */
+/** Campos base del catalogo de permisos de solo lectura. */
 export interface PermisoBase {
   id: string;
   nombre: string;
@@ -281,7 +281,8 @@ export interface AuditQuery {
 // ============================================================
 
 /** Estados de una jornada. AUSENTE es implicito cuando no hay registro. */
-export type AsistenciaEstado = 'PRESENTE' | 'TARDANZA' | 'AUSENTE' | 'DIA_LIBRE';
+export type AsistenciaEstado =
+  "PRESENTE" | "TARDANZA" | "AUSENTE" | "DIA_LIBRE";
 
 /**
  * Fila de la planilla (`GET /asistencia`): un empleado + su jornada del dia.
@@ -371,7 +372,7 @@ export interface Categoria {
 
 export interface CategoriaQuery extends PaginationQuery {
   q?: string;
-  activo?: 'true' | 'false';
+  activo?: "true" | "false";
 }
 
 export interface CreateCategoriaPayload {
@@ -429,7 +430,7 @@ export interface ProductoResumen {
 export interface ProductoQuery extends PaginationQuery {
   q?: string;
   categoriaId?: string;
-  activo?: 'true' | 'false';
+  activo?: "true" | "false";
 }
 
 /** `CreateProductoDto`. `codigo` es unico e inmutable tras el alta. */
@@ -462,10 +463,16 @@ export interface UpdateProductoPayload {
 // ============================================================
 
 /** Estado calculado del stock frente al minimo. */
-export type InventarioEstado = 'OK' | 'ALERTA' | 'CRITICO';
+export type InventarioEstado = "OK" | "ALERTA" | "CRITICO";
 
 /** Tipos de movimiento de stock (kardex). */
-export type MovimientoTipo = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'TRASLADO';
+export type MovimientoTipo =
+  | "ENTRADA"
+  | "SALIDA"
+  | "AJUSTE"
+  | "TRASLADO"
+  | "SALIDA_VENTA"
+  | "ENTRADA_ANULACION";
 
 /** Fila de `GET /inventario` (InventarioService.toDto). */
 export interface InventarioItem {
@@ -513,7 +520,7 @@ export interface UpsertInventarioPayload {
 
 /** `AjusteStockDto`. AJUSTE fija el stock al valor de conteo fisico. */
 export interface AjusteStockPayload {
-  tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+  tipo: "ENTRADA" | "SALIDA" | "AJUSTE";
   cantidad: number;
   referencia?: string;
 }
@@ -562,7 +569,7 @@ export interface KardexResumen {
 // ============================================================
 
 /** Estados de una orden de compra (RECIBIDA y CANCELADA son terminales). */
-export type CompraEstado = 'PENDIENTE' | 'ENVIADA' | 'RECIBIDA' | 'CANCELADA';
+export type CompraEstado = "PENDIENTE" | "ENVIADA" | "RECIBIDA" | "CANCELADA";
 
 /** Linea de una orden de compra (solo en el detalle). */
 export interface CompraItem {
@@ -663,7 +670,7 @@ export interface ProveedorBase {
 export interface ProveedorQuery extends PaginationQuery {
   q?: string;
   categoria?: string;
-  activo?: 'true' | 'false';
+  activo?: "true" | "false";
 }
 
 /** `CreateProveedorDto` — nombre minimo 2 chars. */

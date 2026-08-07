@@ -21,7 +21,7 @@ export type CajaMedioPago =
   | "EFECTIVO"
   | "YAPE"
   | "TRANSFERENCIA"
-  | "TARJETA"  // legacy V1 — no permitido en operaciones nuevas
+  | "TARJETA" // legacy V1 — no permitido en operaciones nuevas
   | "OTRO";
 
 export interface CajaUserRef {
@@ -188,19 +188,6 @@ export interface AbrirCajaPayload {
     cantidad: number;
   }>;
   sedeId?: string;
-}
-
-/**
- * @deprecated Solo para sesiones V1 (legacy). En V2 siempre retorna 422.
- */
-export interface MovimientoCajaPayload {
-  tipo: CajaMovimientoTipo;
-  origen: "MANUAL" | "VENTA" | "PAGO_NO_EFECTIVO";
-  medioPago: CajaMedioPago;
-  concepto: string;
-  monto: number;
-  referencia?: string;
-  comprobante?: string;
 }
 
 export interface ArqueoCajaPayload {
