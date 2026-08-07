@@ -90,14 +90,15 @@ export function hasAnyPermission(
  * Las pantallas respaldadas por API usan exactamente el permiso sembrado por
  * el backend. La autorizacion definitiva siempre vuelve a ejecutarse en NestJS.
  */
-export const ROUTE_PERMISSIONS: Record<string, Permission | null> = {
+type RoutePermission = Permission | readonly Permission[] | null;
+
+export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
   "/dashboard": null,
   "/perfil": null,
   "/seguridad": null,
   "/caja": "caja:leer",
-  "/ventas": "ventas:crear",          // VENDEDORA: crear ventas
-  "/ventas/historial": "ventas:leer", // CAJERO/ADMIN: ver historial + conciliar
-  "/etiquetas": "etiquetas:crear",    // ADMIN/SUPERADMIN: gestionar billeteras
+  "/ventas": ["ventas:crear", "ventas:leer", "ventas:leer-propias"],
+  "/etiquetas": "etiquetas:leer",
   "/categorias": "categorias:leer",
   "/productos": "productos:leer",
   "/inventario": "inventario:leer",
@@ -120,6 +121,9 @@ export function canAccess(
   if (required === null) return true;
   // Ruta no declarada: por defecto se oculta, para no filtrar pantallas nuevas.
   if (required === undefined) return false;
+  if (typeof required !== "string") {
+    return hasAnyPermission(permisos, required);
+  }
   return hasPermission(permisos, required);
 }
 
