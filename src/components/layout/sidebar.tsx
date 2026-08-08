@@ -140,7 +140,7 @@ export function Sidebar() {
         {/* ── Cabecera ── */}
         <div className={cn("flex shrink-0 items-center gap-2.5 px-4 py-4", collapsed && "flex-col gap-2 px-2 py-3")}>
           <Image
-            src="/assets/barbeerLogo.png"
+            src="/assets/LOGO_GENERAL.png"
             alt=""
             width={36}
             height={36}

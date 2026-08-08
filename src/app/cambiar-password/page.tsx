@@ -115,7 +115,7 @@ export default function CambiarPasswordPage() {
         <section className="flex flex-col border-white/10 px-6 pb-6 pt-7 sm:px-10 lg:border-r lg:px-12 lg:py-10">
           <div className="flex items-center justify-between">
             <Image
-              src="/assets/barbeerLogo.png"
+              src="/assets/LOGO_GENERAL.png"
               alt="Bar Beer"
               width={112}
               height={112}
